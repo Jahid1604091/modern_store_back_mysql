@@ -1,0 +1,4 @@
+.env
+node_modules
+invoices
+config/config.json
