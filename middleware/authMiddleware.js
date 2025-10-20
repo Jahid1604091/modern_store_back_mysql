@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const asyncHandler = require('./asyncHandler.js');
-const User = require('../models/user.js');
+const db = require("../models/index");
+const { User } = db;
 const ErrorResponse = require('../utils/errorresponse.js');
 
 
@@ -20,12 +21,10 @@ const protect = asyncHandler(async(req,res,next)=>{
     try {
         //verify token
         const decoded = jwt.verify(token,process.env.JWT_SECRET);
-        req.user = await User.findById(decoded.id);
+        req.user = await User.findByPk(decoded.id);
         next();
     } catch (error) {
-        
         return next(new ErrorResponse('Unauthorized user',401));
-
     }
 
 });
@@ -57,6 +56,7 @@ const optionalAuth = asyncHandler(async(req,res,next)=>{
 //access for specific role
 const authorize = (...roles) =>{
     return (req,res,next) => {
+        const roles = req.users.roles.split(',').join(' ')
         if(!roles.includes(req.user.role)){
             return next(new ErrorResponse(`Role : ${req.user.role} - is not authorized to access`,403));
 

@@ -10,7 +10,7 @@ dotenv.config();
 module.exports = (sequelize, DataTypes) => {
   class User extends Model {
     async matchPassword(enteredPassword) {
-      return await bcrypt.compare(enteredPassword, this.password());
+      return await bcrypt.compare(enteredPassword, this.password);
     }
 
     getSignedJwtToken() {
@@ -38,17 +38,13 @@ module.exports = (sequelize, DataTypes) => {
           msg: 'Password must be at least 6 characters long'
         }
       },
-      // set(value) {
-      //   const salt = bcrypt.genSaltSync(10);
-      //   const hash = bcrypt.hashSync(value, salt);
-      //   this.setDataValue('password', hash);
-      // },
-      // get() {
-      //   return () => this.getDataValue('password');// should return undefined
-      // },
-
+      set(value) {
+        console.log('set',value)
+        const salt = bcrypt.genSaltSync(10);
+        const hash = bcrypt.hashSync(value, salt);
+        this.setDataValue('password', hash);
+      },
     },
-    role: DataTypes.ENUM('user', 'admin'),
     company_id: DataTypes.INTEGER
   }, {
     sequelize,
