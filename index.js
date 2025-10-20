@@ -4,7 +4,7 @@ const cors = require('cors');
 const { sequelize } = require('./config/db.js');
 const { errHandler, notFound } = require('./middleware/errorHandler.js');
 // const productRoutes = require('./routes/productRoutes.js');
-// const userRoutes = require('./routes/userRoutes.js');
+const userRoutes = require('./routes/userRoutes.js');
 // const orderRoutes = require('./routes/orderRoutes.js');
 // const paymentRoutes = require('./routes/paymentRoutes.js');
 // const categoryRoutes = require('./routes/categoryRoutes.js');
@@ -18,7 +18,7 @@ const app = express();
 // connectDB();
 
 try {
-   sequelize.authenticate();
+  sequelize.authenticate();
   console.log('MySQL connected...');
 } catch (error) {
   console.error('Unable to connect to the database:', error);
@@ -37,7 +37,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// app.use('/api/users', userRoutes);
+app.use('/api/users', userRoutes);
 // app.use('/invoices', express.static(path.join(__dirname, './invoices')));
 // app.use('/images', express.static(path.join(__dirname, 'images')));
 // app.use('/api/products', productRoutes);

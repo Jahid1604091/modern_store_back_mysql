@@ -1,11 +1,12 @@
-import asyncHandler from "../middleware/asyncHandler.js";
-import User from '../models/userModel.js';
-import ErrorResponse from "../utils/errorresponse.js";
+const asyncHandler = require('../middleware/asyncHandler.js');
+const ErrorResponse = require('../utils/errorresponse.js');
+const db = require('../models/index');
+const { User } = db;
 
 //@route    /api/users/register
 //@desc     register a user
 //@access   public
-export const register = asyncHandler(async (req, res, next) => {
+const register = asyncHandler(async (req, res, next) => {
     const isExist = await User.findOne({ email: req.body.email });
     if (isExist) {
         return next(new ErrorResponse('User Already Exist', 400));
@@ -15,7 +16,7 @@ export const register = asyncHandler(async (req, res, next) => {
         return res.status(201).json({
             success: true,
             data: user,
-            token: user.getSignedJwtToken(),
+            // token: user.getSignedJwtToken(),
             msg: 'User Creation Successful!'
         });
     }
@@ -27,7 +28,7 @@ export const register = asyncHandler(async (req, res, next) => {
 //@desc     get auth user
 //@route    POST     /api/users/login
 //@access   public
-export const login = asyncHandler(async (req, res, next) => {
+const login = asyncHandler(async (req, res, next) => {
 
     const user = await User.findOne({ email: req.body.email });
     if (user && (await user.matchPassword(req.body.password))) {
@@ -47,7 +48,7 @@ export const login = asyncHandler(async (req, res, next) => {
 //@desc     get profile
 //@route    GET     /api/users/profile
 //@access   private
-export const getProfile = asyncHandler(async (req, res, next) => {
+const getProfile = asyncHandler(async (req, res, next) => {
     const user = await User.findById(req.user.id).select('+password');
     if (!user) {
         return next(new ErrorResponse('User not found', 404));
@@ -57,3 +58,9 @@ export const getProfile = asyncHandler(async (req, res, next) => {
         data: user
     });
 });
+
+module.exports = {
+    register,
+    login,
+    getProfile
+};

@@ -2,21 +2,54 @@
 const {
   Model
 } = require('sequelize');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const dotenv = require('dotenv');
+dotenv.config();
+
 module.exports = (sequelize, DataTypes) => {
   class User extends Model {
-    /**
-     * Helper method for defining associations.
-     * This method is not a part of Sequelize lifecycle.
-     * The `models/index` file will call this method automatically.
-     */
+    async matchPassword(enteredPassword) {
+      return await bcrypt.compare(enteredPassword, this.password());
+    }
+
+    getSignedJwtToken() {
+      return jwt.sign({ id: this.id }, process.env.JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRED_IN
+      });
+    }
+
     static associate(models) {
-      // define association here
+
     }
   }
   User.init({
-    firstName: DataTypes.STRING,
-    lastName: DataTypes.STRING,
-    email: DataTypes.STRING
+    name: DataTypes.STRING,
+    email: DataTypes.STRING,
+    password: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      validate: {
+        notNull: {
+          msg: 'Please enter your password'
+        },
+        len: {
+          args: [6, 100],
+          msg: 'Password must be at least 6 characters long'
+        }
+      },
+      // set(value) {
+      //   const salt = bcrypt.genSaltSync(10);
+      //   const hash = bcrypt.hashSync(value, salt);
+      //   this.setDataValue('password', hash);
+      // },
+      // get() {
+      //   return () => this.getDataValue('password');// should return undefined
+      // },
+
+    },
+    role: DataTypes.ENUM('user', 'admin'),
+    company_id: DataTypes.INTEGER
   }, {
     sequelize,
     modelName: 'User',
