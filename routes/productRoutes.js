@@ -30,7 +30,7 @@ const upload = multer({ storage: storage });
 // Routes
 router
   .route('/')
-  .get(optionalAuth, getAllProducts)
+  .get( getAllProducts)
   .post(protect, upload.single('image'), createProduct);
 
 router

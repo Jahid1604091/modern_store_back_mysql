@@ -78,7 +78,7 @@ const createProduct = asyncHandler(async function (req, res, next) {
     });
   }
 
-  const {name, category_id,gallery,tags} = req.body;
+  const { name, category_id, gallery, tags } = req.body;
   const slug = slugify(name, '-');
 
   // Optional category validation
@@ -163,7 +163,7 @@ const deleteProduct = asyncHandler(async function (req, res, next) {
   });
 });
 
-module.exports = {  
+module.exports = {
   getAllProducts,
   createProduct,
   editProduct,

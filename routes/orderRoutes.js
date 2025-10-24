@@ -1,21 +1,31 @@
-import express from 'express';
+const express = require("express");
 const router = express.Router();
-import { createOrder, getAllOrders, getMyOrders, getMyOrder, updateOrderToPaid, generateInvoice, updateToDelivered, getOrder, getOrdersOverview } from '../controllers/orderController.js';
-import { protect, authorize } from '../middleware/authMiddleware.js';
 
+const {
+  createOrder,
+  getAllOrders,
+  getMyOrders,
+  getMyOrder,
+  updateOrderToPaid,
+  generateInvoice,
+  updateToDelivered,
+  getOrder,
+  getOrdersOverview,
+} = require("../controllers/orderController");
 
-router.route('/').post(protect, createOrder)
-router.route('/myorders').get(protect, getMyOrders)
-router.route('/myorders/:id').get(protect, getMyOrder)
-router.route('/myorders/:id/pay').put(protect, updateOrderToPaid)
-router.route('/myorders/:id/invoice').get(protect, generateInvoice)
+const { protect, authorize } = require("../middleware/authMiddleware");
 
-//---- SYSTEM ADMIN ------
-router.route('/overview').get(protect, authorize('admin'), getOrdersOverview)
-router.route('/').get(protect, authorize('admin'), getAllOrders)
-router.route('/:id').get(protect, authorize('admin'), getOrder)
-router.route('/:id/change-to-delivered').put(protect, authorize('admin'), updateToDelivered)
+// ------------------ USER ROUTES ------------------
+router.post("/", protect, createOrder);
+router.get("/myorders", protect, getMyOrders);
+router.get("/myorders/:id", protect, getMyOrder);
+router.put("/myorders/:id/pay", protect, updateOrderToPaid);
+router.get("/myorders/:id/invoice", protect, generateInvoice);
 
+// ------------------ ADMIN ROUTES ------------------
+router.get("/overview", protect, authorize("admin"), getOrdersOverview);
+router.get("/", protect, authorize("admin"), getAllOrders);
+router.get("/:id", protect, authorize("admin"), getOrder);
+router.put("/:id/change-to-delivered", protect, authorize("admin"), updateToDelivered);
 
-
-export default router
+module.exports = router;

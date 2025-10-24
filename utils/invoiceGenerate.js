@@ -1,8 +1,8 @@
-import PDFDocument from 'pdfkit';
-import fs from 'fs';
+const  PDFDocument =  require('pdfkit');
+const fs = require('fs');
 
 // Function to create the invoice
-export const invoiceGenerate = (order, filePath,dataCallback, endCallback) => {
+const invoiceGenerate = (order, filePath,dataCallback, endCallback) => {
   const doc = new PDFDocument({bufferPages: true, font: 'Courier' , margin: 50 });
   doc.on('data', dataCallback);
   doc.on('end', endCallback);
@@ -64,3 +64,5 @@ export const invoiceGenerate = (order, filePath,dataCallback, endCallback) => {
   // Finalize PDF file
   doc.end();
 };
+
+module.exports = { invoiceGenerate };
