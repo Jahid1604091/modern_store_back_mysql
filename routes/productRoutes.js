@@ -1,34 +1,45 @@
-import express from 'express';
-import { addReview, createProduct, deleteProduct, editProduct, getAllProducts, getProduct, incremeentProductView } from '../controllers/productController.js';
-import { protect, authorize, optionalAuth } from '../middleware/authMiddleware.js';
-import path from 'path';
-import multer from 'multer';
+const express = require('express');
+const path = require('path');
+const multer = require('multer');
+
+const {
+  createProduct,
+  deleteProduct,
+  editProduct,
+  getAllProducts,
+  getProduct,
+} = require('../controllers/productController.js');
+
+const { protect, authorize, optionalAuth } = require('../middleware/authMiddleware.js');
 
 const router = express.Router();
 
-// Set up storage for multer
+// Multer storage setup
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'images/products/');
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
+  destination: function (req, file, cb) {
+    cb(null, 'images/products/');
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
 });
 
-const upload = multer({ storage });
+const upload = multer({ storage: storage });
 
-router.route('/')
-    .get(optionalAuth,getAllProducts)
-    .post(protect, authorize('admin'), upload.single('image'), createProduct);
+// Routes
+router
+  .route('/')
+  .get(optionalAuth, getAllProducts)
+  .post(protect, upload.single('image'), createProduct);
 
-router.route('/:id')
-    .get(getProduct)
-    .patch(protect, authorize('admin'), upload.single('image'), editProduct)
-    .delete(protect, authorize('admin'), deleteProduct);
+router
+  .route('/:id')
+  .get(getProduct)
+  .patch(protect,  upload.single('image'), editProduct)
+  .delete(protect, deleteProduct);
 
-router.route('/:id/view').put(incremeentProductView);
-router.route('/:id/review').post(protect,addReview);
+// router.put('/:id/view', incremeentProductView);
+// router.post('/:id/review', protect, addReview);
 
-export default router;
+module.exports = router;

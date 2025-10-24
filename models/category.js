@@ -23,6 +23,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      parentId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       company_id: {
         type: DataTypes.INTEGER,
       },
