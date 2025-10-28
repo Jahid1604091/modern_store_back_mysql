@@ -20,7 +20,17 @@ module.exports = (sequelize, DataTypes) => {
     }
 
     static associate(models) {
+      // User.belongsTo(models.Company, {
+      //   foreignKey: 'company_id',
+      //   as: 'company'
+      // });
 
+      User.belongsToMany(models.Role, {
+        through: models.UserRole,
+        foreignKey: 'user_id',
+        otherKey: 'role_id',
+        as: 'roles'
+      });
     }
   }
   User.init({
