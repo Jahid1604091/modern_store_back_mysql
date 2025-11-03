@@ -23,12 +23,19 @@ const protect = asyncHandler(async (req, res, next) => {
 
         const user = await User.findOne({
             where: { id: decoded.id },
-            include: {
+            include:{
                 model: Role,
                 as: 'roles',
                 attributes: ['name','id'],
                 through: { attributes: [] },
+                include: [{
+                  model: Permission,
+                  as: 'permissions',
+                  attributes: ['name'],
+                  through: { attributes: [] },
+                }],
             },
+
         });
 
         if (!user) {

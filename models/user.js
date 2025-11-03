@@ -31,6 +31,8 @@ module.exports = (sequelize, DataTypes) => {
         otherKey: 'role_id',
         as: 'roles'
       });
+
+
     }
   }
   User.init({
