@@ -78,7 +78,7 @@ const createProduct = asyncHandler(async function (req, res, next) {
     });
   }
 
-  const { name, category_id, gallery, tags } = req.body;
+  const { name, category_id, gallery, tags, status } = req.body;
   const slug = slugify(name, '-');
 
   // Optional category validation
@@ -99,6 +99,7 @@ const createProduct = asyncHandler(async function (req, res, next) {
     image: req.file.path.replace(/\\/g, '/'),
     gallery: gallery ? JSON.parse(gallery) : [],
     tags: tags ? JSON.parse(tags) : [],
+    status: status ? 'active' :'inactive'
   });
 
   res.status(201).json({

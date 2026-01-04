@@ -85,8 +85,8 @@ const authorize = (...allowedRoles) => {
         if (!req.user || !req.user.roles) {
             return next(new ErrorResponse('Access denied. No role assigned.', 403));
         }
-
-        const userRoles = req.user.roles.map(role => role.name);
+    
+        const userRoles = req.user.roles.map(role => role.name.toLowerCase());
         const hasRole = userRoles.some(role => allowedRoles.includes(role));
 
         if (!hasRole) {

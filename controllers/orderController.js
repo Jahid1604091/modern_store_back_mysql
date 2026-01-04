@@ -1,10 +1,10 @@
 const asyncHandler = require("../middleware/asyncHandler");
-const db = require("../models/index");
-const {Order, Product} = db;
+const { Order, Product, User, OrderItem, sequelize } = require("../models");
 const path = require("path");
 const fs = require("fs");
 const { invoiceGenerate } = require("../utils/invoiceGenerate");
 const { per_page } = require("../utils/misc");
+
 
 //--------------------------------------------------------------
 //---------------- C U S T O M E R ------------------------------
@@ -13,76 +13,110 @@ const { per_page } = require("../utils/misc");
 // @route    POST /api/orders
 // @desc     Create a new order
 // @access   Protected
-exports.createOrder = asyncHandler(async function (req, res) {
-  const order = new Order(Object.assign({}, req.body, { user: req.user.id }));
-  const newOrder = await order.save();
+exports.createOrder = asyncHandler(async (req, res) => {
+  const newOrder = await Order.create({
+    ...req.body,
+    user_id: req.user.id,
+  });
 
-  return res.status(200).json({
+  res.status(200).json({
     success: true,
     data: newOrder,
     msg: "Order Creation Successful!",
   });
 });
 
+
 // @route    GET /api/orders/myorders
 // @desc     Get logged-in user's orders
 // @access   Protected
-exports.getMyOrders = asyncHandler(async function (req, res) {
-  const orders = await Order.find({ user: req.user.id });
-  return res.status(200).json({
+exports.getMyOrders = asyncHandler(async (req, res) => {
+  const orders = await Order.findAll({
+    where: { user_id: req.user.id },
+    order: [["createdAt", "DESC"]],
+  });
+
+  res.status(200).json({
     success: true,
     data: orders,
   });
 });
 
+
 // @route    GET /api/orders/myorders/:id
 // @desc     Get one specific order
 // @access   Protected
-exports.getMyOrder = asyncHandler(async function (req, res) {
-  const order = await Order.findById(req.params.id).populate(
-    "user",
-    "id name email"
-  );
-  return res.status(200).json({
+exports.getMyOrder = asyncHandler(async (req, res) => {
+  const order = await Order.findOne({
+    where: {
+      id: req.params.id,
+      user_id: req.user.id,
+    },
+    include: [
+      {
+        model: User,
+        as:'user',
+        attributes: ["id", "name", "email"],
+      },
+      // {
+      //   model: OrderItem,
+      //   include: [Product],
+      // },
+    ],
+  });
+
+  res.status(200).json({
     success: true,
     data: order,
   });
 });
 
+
 // @route    PUT /api/orders/myorders/:id/pay
 // @desc     Update order to paid
 // @access   Protected
-exports.updateOrderToPaid = asyncHandler(async function (req, res) {
-  const order = await Order.findById(req.params.id);
-  order.isPaid = true;
-  order.paidAt = Date.now();
+exports.updateOrderToPaid = asyncHandler(async (req, res) => {
+  const order = await Order.findByPk(req.params.id, {
+    include: [{ model: OrderItem }],
+  });
 
-  // increment sales count
-  for (const item of order.orderItems) {
-    const product = await Product.findById(item.product);
-    if (product) {
-      product.sales += item.qty;
-      await product.save();
-    }
+  if (!order) {
+    return res.status(404).json({ success: false, msg: "Order not found" });
   }
 
-  const updatedOrder = await order.save();
-  return res.status(200).json({
+  await order.update({
+    isPaid: true,
+    paidAt: new Date(),
+  });
+
+  // increment product sales
+  for (const item of order.OrderItems) {
+    await Product.increment(
+      { sales: item.qty },
+      { where: { id: item.productId } }
+    );
+  }
+
+  res.status(200).json({
     success: true,
-    data: updatedOrder,
+    data: order,
     msg: "Order Updated Successfully!",
   });
 });
 
+
 // @route    GET /api/orders/myorders/:id/invoice
 // @desc     Generate invoice
 // @access   Protected
-exports.generateInvoice = asyncHandler(async function (req, res) {
+exports.generateInvoice = asyncHandler(async (req, res) => {
   const __dirnameResolved = path.resolve();
-  const order = await Order.findById(req.params.id).populate(
-    "user",
-    "name email"
-  );
+
+  const order = await Order.findByPk(req.params.id, {
+    include: [
+      { model: User, attributes: ["name", "email"] },
+      { model: OrderItem, include: [Product] },
+    ],
+  });
 
   const invoicesDir = path.join(__dirnameResolved, "invoices");
   if (!fs.existsSync(invoicesDir)) {
@@ -91,31 +125,24 @@ exports.generateInvoice = asyncHandler(async function (req, res) {
 
   const invoicePath = path.join(invoicesDir, `invoice_${order.id}.pdf`);
 
-  const stream = res.writeHead(200, {
+  res.writeHead(200, {
     "Content-Type": "application/pdf",
     "Content-Disposition": "attachment;filename=invoice.pdf",
   });
 
-  await new Promise(function (resolve) {
+  await new Promise((resolve) => {
     invoiceGenerate(
       order,
       invoicePath,
-      function (chunk) {
-        stream.write(chunk);
-      },
-      function () {
-        stream.end();
-      },
-      resolve
+      (chunk) => res.write(chunk),
+      () => {
+        res.end();
+        resolve();
+      }
     );
   });
-
-  return res.status(200).json({
-    success: true,
-    data: invoicePath,
-    msg: "Invoice Generated Successfully!",
-  });
 });
+
 
 //--------------------------------------------------------------
 //---------------- A D M I N -----------------------------------
@@ -124,46 +151,57 @@ exports.generateInvoice = asyncHandler(async function (req, res) {
 // @route    GET /api/orders
 // @desc     Get all orders
 // @access   Admin
-exports.getAllOrders = asyncHandler(async function (req, res) {
+exports.getAllOrders = asyncHandler(async (req, res) => {
   const page = Number(req.query.page) || 1;
+  const offset = per_page * (page - 1);
 
-  const orders = await Order.find({})
-    .select(
-      "_id shippingPrice taxPrice totalPrice isPaid isDelivered createdAt paidAt deliveredAt"
-    )
-    .limit(per_page)
-    .skip(per_page * (page - 1));
+  const { rows, count } = await Order.findAndCountAll({
+    attributes: [
+      "id",
+      "shipping_cost",
+      "total",
+      "status",
+      "createdAt",
+      // "paidAt",
+      // "deliveredAt",
+    ],
+    limit: per_page,
+    offset,
+    order: [["createdAt", "DESC"]],
+  });
 
-  const totalOrders = await Order.countDocuments();
-
-  return res.status(200).json({
+  res.status(200).json({
     success: true,
-    data: orders,
-    count: totalOrders,
+    data: rows,
+    count,
     page,
-    pages: Math.ceil(totalOrders / per_page),
+    pages: Math.ceil(count / per_page),
   });
 });
+
 
 // @route    GET /api/orders/:id
 // @desc     Get single order details
 // @access   Admin
-exports.getOrder = asyncHandler(async function (req, res) {
-  const orders = await Order.findById(req.params.id)
-    .select("-updatedAt -__v")
-    .populate("user", "id name email");
+exports.getOrder = asyncHandler(async (req, res) => {
+  const order = await Order.findByPk(req.params.id, {
+    attributes: { exclude: ["updatedAt"] },
+    include: [{ model: User, attributes: ["id", "name", "email"] }],
+  });
 
-  return res.status(200).json({
+  res.status(200).json({
     success: true,
-    data: orders,
+    data: order,
   });
 });
+
 
 // @route    PUT /api/orders/:id/change-to-delivered
 // @desc     Update order to delivered
 // @access   Admin
-exports.updateToDelivered = asyncHandler(async function (req, res) {
-  const order = await Order.findById(req.params.id);
+exports.updateToDelivered = asyncHandler(async (req, res) => {
+  const order = await Order.findByPk(req.params.id);
+
   if (!order) {
     return res.status(404).json({
       success: false,
@@ -171,57 +209,50 @@ exports.updateToDelivered = asyncHandler(async function (req, res) {
     });
   }
 
-  order.isDelivered = true;
-  order.deliveredAt = Date.now();
-  const updatedOrder = await order.save();
+  await order.update({
+    isDelivered: true,
+    deliveredAt: new Date(),
+  });
 
-  if (updatedOrder) {
-    return res.status(200).json({
-      success: true,
-      msg: "Order Updated Successfully!",
-    });
-  } else {
-    return res.status(400).json({
-      success: false,
-      msg: "Order Update to Delivered failed!",
-    });
-  }
+  res.status(200).json({
+    success: true,
+    msg: "Order Updated Successfully!",
+  });
 });
+
 
 // @route    GET /api/orders/overview
 // @desc     Get summary of all orders
 // @access   Admin
-exports.getOrdersOverview = asyncHandler(async function (req, res) {
-  const overview = await Order.aggregate([
-    {
-      $group: {
-        _id: null,
-        totalPrice: { $sum: "$totalPrice" },
-        totalOrders: { $sum: 1 },
-        totalPaidOrders: {
-          $sum: { $cond: ["$isPaid", 1, 0] },
-        },
-        totalDeliveredOrders: {
-          $sum: { $cond: ["$isDelivered", 1, 0] },
-        },
-        totalOrderItems: { $sum: { $sum: "$orderItems.qty" } },
-        uniqueUsers: { $addToSet: "$user" },
-      },
-    },
-    {
-      $project: {
-        totalPrice: 1,
-        totalOrders: 1,
-        totalPaidOrders: 1,
-        totalDeliveredOrders: 1,
-        totalOrderItems: 1,
-        totalUsers: { $size: "$uniqueUsers" },
-      },
-    },
-  ]);
+exports.getOrdersOverview = asyncHandler(async (req, res) => {
+  const overview = await Order.findOne({
+    attributes: [
+      [sequelize.fn("SUM", sequelize.col("total")), "totalPrice"],
+      [sequelize.fn("COUNT", sequelize.col("id")), "totalOrders"],
+      [
+        sequelize.fn(
+          "SUM",
+          sequelize.literal("CASE WHEN status = 'delivered' THEN 1 ELSE 0 END")
+        ),
+        "totalPaidOrders",
+      ],
+      // [
+      //   sequelize.fn(
+      //     "SUM",
+      //     sequelize.literal("CASE WHEN status = delivered THEN 1 ELSE 0 END")
+      //   ),
+      //   "totalDeliveredOrders",
+      // ],
+      [
+        sequelize.fn("COUNT", sequelize.fn("DISTINCT", sequelize.col("user_id"))),
+        "totalUsers",
+      ],
+    ],
+    raw: true,
+  });
 
-  return res.status(200).json({
+  res.status(200).json({
     success: true,
-    data: overview[0] || {},
+    data: overview,
   });
 });
