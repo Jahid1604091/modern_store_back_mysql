@@ -86,7 +86,7 @@ module.exports = (sequelize, DataTypes) => {
   // Associations (future-ready)
   Order.associate = function(models) {
     // If you add User model later
-    // Order.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
+    Order.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
 
     // If you add OrderItem model later
     // Order.hasMany(models.OrderItem, { foreignKey: 'order_id', as: 'items' });

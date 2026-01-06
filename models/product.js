@@ -6,10 +6,10 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       // Future associations — uncomment when Brand and Vendor models exist
 
-      // Product.belongsTo(models.Brand, {
-      //   foreignKey: 'brand',
-      //   as: 'brand_info',
-      // });
+      Product.belongsTo(models.Category, {
+        foreignKey: 'category_id',
+        as: 'category',
+      });
 
       // Product.belongsTo(models.Vendor, {
       //   foreignKey: 'vendor_id',

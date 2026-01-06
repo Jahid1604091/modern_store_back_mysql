@@ -22,7 +22,7 @@ const getAllProducts = asyncHandler(async function (req, res) {
   const perPage = 10;
   const searchTerm = req.query.q ? req.query.q.trim() : '';
 
-  const where = {};
+  const where = {status:true};
 
   // Search functionality
   if (searchTerm) {
@@ -36,10 +36,17 @@ const getAllProducts = asyncHandler(async function (req, res) {
   const total = await Product.count({ where: where });
 
   const products = await Product.findAll({
+    include: [{
+      model: Category,
+      as: 'category',
+      attributes: ['id', 'name'],
+      where: { isActive: true }
+    }],
     where: where,
     offset: (page - 1) * perPage,
     limit: perPage,
     order: [['createdAt', 'DESC']],
+    attributes: { exclude: ['category_id', 'createdAt', 'updatedAt'] }
   });
 
   res.status(200).json({
@@ -55,7 +62,14 @@ const getAllProducts = asyncHandler(async function (req, res) {
 // @desc     Get single product
 // @access   Public
 const getProduct = asyncHandler(async function (req, res, next) {
-  const product = await Product.findByPk(req.params.id);
+  const product = await Product.findByPk(req.params.id, {
+    include: [{
+      model: Category,
+      as: 'category',
+      attributes: ['id', 'name'],
+      where: { isActive: true }
+    }],
+  }, { where: { status: true } });
   if (!product) {
     return next(new ErrorResponse('Product not found', 404));
   }
@@ -99,7 +113,7 @@ const createProduct = asyncHandler(async function (req, res, next) {
     image: req.file.path.replace(/\\/g, '/'),
     gallery: gallery ? JSON.parse(gallery) : [],
     tags: tags ? JSON.parse(tags) : [],
-    status: status ? 'active' :'inactive'
+    status: status ? 'active' : 'inactive'
   });
 
   res.status(201).json({
@@ -119,7 +133,6 @@ const editProduct = asyncHandler(async function (req, res, next) {
   }
 
   const body = req.body;
-
   // Handle image replacement
   if (req.file) {
     if (product.image) {
