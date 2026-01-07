@@ -14,17 +14,116 @@ const { per_page } = require("../utils/misc");
 // @desc     Create a new order
 // @access   Protected
 exports.createOrder = asyncHandler(async (req, res) => {
-  const newOrder = await Order.create({
-    ...req.body,
-    user_id: req.user.id,
-  });
+  const { orderItems = [] } = req.body;
 
-  res.status(200).json({
-    success: true,
-    data: newOrder,
-    msg: "Order Creation Successful!",
-  });
+  if (!orderItems.length) {
+    return res.status(400).json({
+      success: false,
+      msg: "Order items are required",
+    });
+  }
+
+  const transaction = await Order.sequelize.transaction();
+
+  try {
+    /* ============================
+       1. Fetch products from DB
+    ============================ */
+    const productIds = orderItems.map(item => item.id);
+
+    const products = await Product.findAll({
+      where: { id: productIds },
+      transaction,
+    });
+
+    if (products.length !== productIds.length) {
+      throw new Error("One or more products not found");
+    }
+
+    const productMap = {};
+    products.forEach(p => {
+      productMap[p.id] = p;
+    });
+
+    /* ============================
+       2. Calculate Subtotal
+    ============================ */
+    let subtotal = 0;
+
+    const processedOrderItems = orderItems.map(item => {
+      const product = productMap[item.id];
+      const unitPrice = product.price;
+      const lineTotal = unitPrice * item.qty;
+
+      subtotal += lineTotal;
+
+      return {
+        product_id: product.id,
+        unit_price: unitPrice,
+        order_quantity: item.qty,
+      };
+    });
+
+    /* ============================
+       3. Business Calculations
+    ============================ */
+    //@ add these in DB
+    const SHIPPING_COST = 100;
+    const TAX_PERCENT = 5;
+    const DISCOUNT_PERCENT = 10;
+    const FREE_SHIPPING_MIN = 1000;
+
+    const discount = Math.round((subtotal * DISCOUNT_PERCENT) / 100);
+    const taxableAmount = subtotal - discount;
+    const tax = Math.round((taxableAmount * TAX_PERCENT) / 100);
+
+    const shipping_cost =
+      taxableAmount >= FREE_SHIPPING_MIN ? 0 : SHIPPING_COST;
+
+    const total = taxableAmount + tax + shipping_cost;
+
+    /* ============================
+       4. Create Order
+    ============================ */
+    const newOrder = await Order.create(
+      {
+        user_id: req.user.id,
+        subtotal,
+        discount,
+        tax, //add this column later
+        shipping_cost,
+        total,
+        shipping_address: req.body.shippingAddress,
+        billing_address: req.body.billingAddress,
+        notes: req.body.notes,
+        payment_method: req.body.paymentMethod,
+      },
+      { transaction }
+    );
+
+    /* ============================
+       5. Save Order Items
+    ============================ */
+    processedOrderItems.forEach(item => {
+      item.order_id = newOrder.id;
+    });
+
+    await OrderItem.bulkCreate(processedOrderItems, { transaction });
+
+    await transaction.commit();
+
+    res.status(201).json({
+      success: true,
+      data: newOrder,
+      msg: "Order Creation Successful!",
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
 });
+
 
 
 // @route    GET /api/orders/myorders
@@ -32,6 +131,23 @@ exports.createOrder = asyncHandler(async (req, res) => {
 // @access   Protected
 exports.getMyOrders = asyncHandler(async (req, res) => {
   const orders = await Order.findAll({
+    include: [
+      // {
+      //   model: User,
+      //   as: 'user',
+      //   attributes: ["id", "name", "email"],
+      // },
+      {
+        model: OrderItem,
+        as: 'items',
+        attributes: ['order_quantity', 'unit_price'],
+        include: [{
+          model: Product,
+          as: 'product',
+          attributes: ['id', 'name', 'price']
+        }],
+      },
+    ],
     where: { user_id: req.user.id },
     order: [["createdAt", "DESC"]],
   });
@@ -41,7 +157,6 @@ exports.getMyOrders = asyncHandler(async (req, res) => {
     data: orders,
   });
 });
-
 
 // @route    GET /api/orders/myorders/:id
 // @desc     Get one specific order
@@ -54,14 +169,15 @@ exports.getMyOrder = asyncHandler(async (req, res) => {
     },
     include: [
       {
-        model: User,
-        as:'user',
-        attributes: ["id", "name", "email"],
+        model: OrderItem,
+        as: 'items',
+        attributes: ['order_quantity', 'unit_price'],
+        include: [{
+          model: Product,
+          as: 'product',
+          attributes: ['id', 'name', 'price','image']
+        }],
       },
-      // {
-      //   model: OrderItem,
-      //   include: [Product],
-      // },
     ],
   });
 
