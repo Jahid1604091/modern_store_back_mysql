@@ -11,7 +11,8 @@ const {
 } = require('../controllers/productController.js');
 
 const { protect, authorize, optionalAuth } = require('../middleware/authMiddleware.js');
-
+const { updateValidationRules } = require('../dtos/productDto.js');
+const validator = require('../middleware/validator.js');
 const router = express.Router();
 
 // Multer storage setup
@@ -30,13 +31,13 @@ const upload = multer({ storage: storage });
 // Routes
 router
   .route('/')
-  .get( getAllProducts)
+  .get(getAllProducts)
   .post(protect, upload.single('image'), createProduct);
 
 router
   .route('/:id')
   .get(getProduct)
-  .patch(protect,  upload.single('image'), editProduct)
+  .patch(protect,upload.single('image'), updateValidationRules(), validator,  editProduct)
   .delete(protect, deleteProduct);
 
 // router.put('/:id/view', incremeentProductView);

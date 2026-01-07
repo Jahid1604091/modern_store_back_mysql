@@ -22,7 +22,7 @@ const getAllProducts = asyncHandler(async function (req, res) {
   const perPage = 10;
   const searchTerm = req.query.q ? req.query.q.trim() : '';
 
-  const where = {status:true};
+  const where = {};
 
   // Search functionality
   if (searchTerm) {
@@ -40,7 +40,6 @@ const getAllProducts = asyncHandler(async function (req, res) {
       model: Category,
       as: 'category',
       attributes: ['id', 'name'],
-      where: { isActive: true }
     }],
     where: where,
     offset: (page - 1) * perPage,
@@ -69,7 +68,7 @@ const getProduct = asyncHandler(async function (req, res, next) {
       attributes: ['id', 'name'],
       where: { isActive: true }
     }],
-  }, { where: { status: true } });
+  });
   if (!product) {
     return next(new ErrorResponse('Product not found', 404));
   }
