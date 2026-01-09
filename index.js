@@ -6,7 +6,7 @@ const { errHandler, notFound } = require('./middleware/errorHandler.js');
 const productRoutes = require('./routes/productRoutes.js');
 const userRoutes = require('./routes/userRoutes.js');
 const orderRoutes = require('./routes/orderRoutes.js');
-// const paymentRoutes = require('./routes/paymentRoutes.js');
+const paymentRoutes = require('./routes/paymentRoutes.js');
 const categoryRoutes = require('./routes/categoryRoutes.js');
 // const brandRoutes = require('./routes/brandRoutes.js');
 const path = require('path');
@@ -42,7 +42,7 @@ app.use('/invoices', express.static(path.join(__dirname, './invoices')));
 app.use('/images', express.static(path.join(__dirname, 'images')));
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
-// app.use('/api/payments', paymentRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/categories', categoryRoutes);
 // app.use('/api/brands', brandRoutes);
 

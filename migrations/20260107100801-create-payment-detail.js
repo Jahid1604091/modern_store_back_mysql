@@ -13,6 +13,34 @@ module.exports = {
         type: Sequelize.INTEGER,
         allowNull: false
       },
+      payable_amount: {
+        type: Sequelize.DECIMAL,
+        allowNull: false,
+        defaultValue:0
+      },
+      advance_paid: {
+        type: Sequelize.DECIMAL,
+        allowNull: false,
+        defaultValue:0
+      },
+      user_id: {
+        type: Sequelize.INTEGER,
+      },
+      payment_medium: {
+        type: Sequelize.STRING(100),
+      },
+      acc_no: {
+        type: Sequelize.STRING(100),
+        allowNull: true
+      },
+      trx_id: {
+       type: Sequelize.STRING(100),
+        allowNull: true
+      },
+      bank_details: {
+        type: Sequelize.JSON,
+        allowNull: true
+      },
       paid_by: {
         type: Sequelize.INTEGER
       },
@@ -22,14 +50,15 @@ module.exports = {
       shipped_by: {
         type: Sequelize.INTEGER
       },
-      paidAt: {
-        allowNull: false,
+      paid_at: {
+        allowNull: true,
         type: Sequelize.DATE
       },
-      deliveredAt: {
-        allowNull: false,
+      delivered_at: {
+        allowNull: true,
         type: Sequelize.DATE
       },
+
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE

@@ -1,9 +1,10 @@
 const asyncHandler = require("../middleware/asyncHandler");
-const { Order, Product, User, OrderItem, sequelize } = require("../models");
+const { Order, Product, User, OrderItem, PaymentDetail, sequelize } = require("../models");
 const path = require("path");
 const fs = require("fs");
 const { invoiceGenerate } = require("../utils/invoiceGenerate");
 const { per_page } = require("../utils/misc");
+const { model } = require("mongoose");
 
 
 //--------------------------------------------------------------
@@ -178,6 +179,11 @@ exports.getMyOrder = asyncHandler(async (req, res) => {
           attributes: ['id', 'name', 'price','image']
         }],
       },
+      {
+        model:PaymentDetail,
+        as:'payment_details',
+        attributes:['payable_amount','advance_paid','payment_medium']
+      }
     ],
   });
 
