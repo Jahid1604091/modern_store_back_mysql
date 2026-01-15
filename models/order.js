@@ -65,6 +65,13 @@ module.exports = (sequelize, DataTypes) => {
 
     shipping_address: {
       type: DataTypes.TEXT,
+      get() {
+        const raw = this.getDataValue('shipping_address');
+        return raw ? JSON.parse(raw) : null;
+      },
+      set(value) {
+        this.setDataValue('shipping_address', JSON.stringify(value));
+      },
     },
     billing_address: {
       type: DataTypes.TEXT,
@@ -76,15 +83,19 @@ module.exports = (sequelize, DataTypes) => {
     tracking_number: {
       type: DataTypes.STRING(100),
     },
+    // createdAt: {
+    //   allowNull: true,
+    //   type: DataTypes.DATE
+    // },
   },
-  {
-    sequelize,
-    modelName: 'Order',
-    tableName: 'Orders',
-  });
+    {
+      sequelize,
+      modelName: 'Order',
+      tableName: 'Orders',
+    });
 
   // Associations (future-ready)
-  Order.associate = function(models) {
+  Order.associate = function (models) {
     Order.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
     Order.hasMany(models.OrderItem, { foreignKey: 'order_id', as: 'items' });
     Order.hasMany(models.PaymentDetail, { foreignKey: 'order_id', as: 'payment_details' });
