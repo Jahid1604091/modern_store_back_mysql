@@ -12,26 +12,32 @@ Admin - admin@gmail.com | pass - admin@123
 
 ###Features:
 -dynamic categories x
--rating giving option 
+-rating/review giving option 
 -searching products x
     -category/tag wise
 -filtering product (rating/price/date)
 -payment 
-    -advance payment option
+    -advance payment option x
     -manual x
     -gateway
         -ssl
         -bkash
 -user profile
--order list
+-order list/history
 -wishlist
 -return policy
 -size for dress item / publisher - book item etc
 -dynamic banner/add
+-add/promotion campaign
 -multi currency/language
 -automatic suggestion for similar products
 -product trial form home (dress in virtual reality, book - partial reading)
+    -physical trial with pay and return if not likedv (trial order type)
+    -virtual (2d image)
+    -mixed both
 -oAuth/Email/SSO/Social Media login
+-sms/email notification
+-in app notification
 -multitenancy 
 -image/images upload to server /s3
 

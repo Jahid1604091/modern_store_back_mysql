@@ -15,7 +15,7 @@ const protect = asyncHandler(async (req, res, next) => {
     }
 
     if (!token) {
-        return next(new ErrorResponse('Unauthorized user', 401));
+        return next(new ErrorResponse('Please Login first', 401));
     }
 
     try {

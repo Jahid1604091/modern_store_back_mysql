@@ -21,24 +21,24 @@ class ExcelExportService {
         return workbook;
     }
 
-    static async generateUsersReport(reportData, options = {}) {
-        const workbook = new ExcelJS.Workbook();
+    // static async generateUsersReport(reportData, options = {}) {
+    //     const workbook = new ExcelJS.Workbook();
 
-        // Set workbook properties
-        workbook.creator = 'User Management System';
-        workbook.lastModifiedBy = 'System';
-        workbook.created = new Date();
-        workbook.modified = new Date();
+    //     // Set workbook properties
+    //     workbook.creator = 'User Management System';
+    //     workbook.lastModifiedBy = 'System';
+    //     workbook.created = new Date();
+    //     workbook.modified = new Date();
 
-        // Create multiple worksheets
-        // await this.createSummarySheet(workbook, reportData, options);
-        await this.createDetailedUsersReportSheet(workbook, reportData.users || reportData, options);
-        // await this.createLocationSummarySheet(workbook, reportData.summary, options);
-        // await this.createHolidaySheet(workbook, reportData.users || reportData, options);
-        // await this.createPolicySheet(workbook, reportData.users || reportData, options);
+    //     // Create multiple worksheets
+    //     // await this.createSummarySheet(workbook, reportData, options);
+    //     await this.createDetailedUsersReportSheet(workbook, reportData.users || reportData, options);
+    //     // await this.createLocationSummarySheet(workbook, reportData.summary, options);
+    //     // await this.createHolidaySheet(workbook, reportData.users || reportData, options);
+    //     // await this.createPolicySheet(workbook, reportData.users || reportData, options);
 
-        return workbook;
-    }
+    //     return workbook;
+    // }
 
     static async createSummarySheet(workbook, reportData, options) {
         const worksheet = workbook.addWorksheet('Summary');
@@ -132,26 +132,18 @@ class ExcelExportService {
 
     static async createDetailedReportSheet(workbook, data, options) {
         const worksheet = workbook.addWorksheet('Detailed Report');
-        console.log(data);
+        
         // Headers with comprehensive information
         const headers = [
             { header: 'Report Date', key: 'date_range', width: 15 },
-            { header: 'Employee ID', key: 'employee_id', width: 15 },
-            { header: 'Employee Name', key: 'user_name', width: 25 },
-            { header: 'Region', key: 'location_name', width: 20 },
-            { header: 'Area', key: 'area_name', width: 20 },
-            { header: 'RFF Point', key: 'rff_name', width: 20 },
-            { header: 'Designation', key: 'designation_name', width: 20 },
-            { header: 'Status', key: 'present_days', width: 15 },
-            { header: 'Fingerprint Enrolled?', key: 'fingerprint', width: 30 },
-            { header: 'In Time', key: 'clock_in', width: 30 },
-            { header: 'Out Time', key: 'clock_out', width: 30 },
-            { header: 'IsManual?', key: 'isManual', width: 30 },
-            { header: 'In Location', key: 'attendance_in_location', width: 30 },
-            { header: 'Out Location', key: 'attendance_out_location', width: 30 },
-            { header: 'In Remarks', key: 'in_remarks', width: 30 },
-            { header: 'Out Remarks', key: 'out_remarks', width: 30 }
+            { header: 'Order ID', key: 'order_number', width: 15 },
+            { header: 'Shipping Cost', key: 'shipping_cost', width: 25 },
+            { header: 'Total', key: 'total', width: 20 },
+            { header: 'Order status', key: 'status', width: 20 },
+            { header: 'Payment Status', key: 'payment_status', width: 20 },
+            { header: 'Payment Medium', key: 'payment_method', width: 20 },
         ];
+
 
         worksheet.columns = headers;
 
@@ -195,80 +187,33 @@ class ExcelExportService {
         // Process and add data
         data.forEach((user) => {
             const baseRowData = {
-                employee_id: user?.employee_id || 'N/A',
-                user_name: user.user_name || 'N/A',
-                location_name: user.location_name || 'N/A',
-                area_name: user.area_name || 'N/A',
-                rff_name: user.rff_name || 'N/A',
-                designation_name: user.designation_name || 'N/A',
-                fingerprint: user.hasFingerprint ? "Yes" : "No",
+                order_number: user?.order_number || 'N/A',
+                shipping_cost: user.shipping_cost || 'N/A',
+                total: user.total || 'N/A',
+                status: user.status || 'N/A',
+                payment_status: user.payment_status || 'N/A',
+                payment_method: user.payment_method || 'N/A',
             };
 
             // Handle clock in/out times - ensure they exist and are arrays
-            const clockInTimes = Array.isArray(user.clock_in) ? user.clock_in : [];
-            const clockOutTimes = Array.isArray(user.clock_out) ? user.clock_out : [];
-            const isManuals = Array.isArray(user.isManual) ? user.isManual : [];
-            const clockInLocations = Array.isArray(user.attendance_in_location) ? user.attendance_in_location : [];
-            const clockOutLocations = Array.isArray(user.attendance_out_location) ? user.attendance_out_location : [];
-            const inRemarks = Array.isArray(user.in_remarks) ? user.in_remarks : [];
-            const outRemarks = Array.isArray(user.out_remarks) ? user.out_remarks : [];
+            // const clockInTimes = Array.isArray(user.clock_in) ? user.clock_in : [];
+           
 
             // Create a map for quick lookup of attendance data by date
-            const attendanceByDate = {};
+            const orderByDate = {};
 
-            // Map clock in times by date
-            clockInTimes.forEach((clockIn, index) => {
-                if (clockIn) {
-                    const date = dayjs(clockIn).format('YYYY-MM-DD');
-                    if (!attendanceByDate[date]) {
-                        attendanceByDate[date] = {};
-                    }
-                    attendanceByDate[date].clock_in = clockIn;
-                }
-
-                //for manuals
-                if (isManuals[index]) {
-                    const date = dayjs(clockIn).format('YYYY-MM-DD');
-                    if (!attendanceByDate[date]) {
-                        attendanceByDate[date] = {};
-                    }
-                    attendanceByDate[date].isManual = true;
-                    attendanceByDate[date].attendance_in_location = clockInLocations[index];
-                    attendanceByDate[date].attendance_out_location = clockOutLocations[index];
-                    attendanceByDate[date].in_remarks = inRemarks[index];
-                    attendanceByDate[date].out_remarks = outRemarks[index];
-
-                }
-            });
-
-            // Map clock out times by date
-            clockOutTimes.forEach((clockOut, index) => {
-                if (clockOut) {
-                    const date = dayjs(clockOut).format('YYYY-MM-DD');
-                    if (!attendanceByDate[date]) {
-                        attendanceByDate[date] = {};
-                    }
-                    attendanceByDate[date].clock_out = clockOut;
-                }
-            });
 
 
 
             // Create a row for each date in the range
             dateRange.forEach(date => {
-                const attendance = attendanceByDate[date] || {};
+                const attendance = orderByDate[date] || {};
 
                 const rowData = {
                     ...baseRowData,
                     date_range: dayjs(date).format('DD-MM-YYYY'),
-                    present_days: attendance.clock_in ? "Present" : "Absent",
-                    clock_in: attendance.clock_in ? dayjs(attendance.clock_in).format('HH:mm:ss') : 'N/A',
-                    clock_out: attendance.clock_out ? dayjs(attendance.clock_out).format('HH:mm:ss') : 'N/A',
-                    isManual: attendance.isManual ? "Yes" : "No",
-                    attendance_in_location: attendance.attendance_in_location || 'N/A',
-                    attendance_out_location: attendance.attendance_out_location || 'N/A',
-                    in_remarks: attendance.in_remarks || 'N/A',
-                    out_remarks: attendance.out_remarks || 'N/A',
+                    // present_days: attendance.clock_in ? "Present" : "Absent",
+                
                 };
 
                 // Ensure all required fields have values
@@ -282,14 +227,14 @@ class ExcelExportService {
                 excelRow.height = 20;
 
                 // Add conditional formatting for better visualization
-                const presentCell = excelRow.getCell('present_days');
-                if (rowData.present_days === 'Present') {
-                    presentCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E8' } };
-                    presentCell.font = { color: { argb: 'FF2E7D32' } };
-                } else {
-                    presentCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEAEA' } };
-                    presentCell.font = { color: { argb: 'FFD32F2F' } };
-                }
+                // const presentCell = excelRow.getCell('present_days');
+                // if (rowData.present_days === 'Present') {
+                //     presentCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E8' } };
+                //     presentCell.font = { color: { argb: 'FF2E7D32' } };
+                // } else {
+                //     presentCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEAEA' } };
+                //     presentCell.font = { color: { argb: 'FFD32F2F' } };
+                // }
 
                 // Add borders to all cells
                 excelRow.eachCell((cell) => {
@@ -405,200 +350,14 @@ class ExcelExportService {
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
     }
 
-    static async createLocationSummarySheet(workbook, summary, options) {
-        const worksheet = workbook.addWorksheet('Location Summary');
-
-        // Title
-        worksheet.mergeCells('A1:F2');
-        const titleCell = worksheet.getCell('A1');
-        titleCell.value = 'LOCATION-WISE ATTENDANCE SUMMARY';
-        titleCell.font = { size: 16, bold: true };
-        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-
-        if (summary && summary.by_location && summary.by_location.length > 0) {
-            // Headers
-            const headers = [
-                { header: 'Location Name', key: 'name', width: 25 },
-                { header: 'Employee Count', key: 'user_count', width: 18 },
-                { header: 'Total Working Days', key: 'total_working_days', width: 20 },
-                { header: 'Total Present Days', key: 'total_present_days', width: 20 },
-                { header: 'Total Absent Days', key: 'total_absent_days', width: 20 },
-                { header: 'Average Attendance %', key: 'average_attendance', width: 22 }
-            ];
-
-            worksheet.getRow(4).values = headers.map(h => h.header);
-            worksheet.columns = headers;
-
-            // Style header
-            const headerRow = worksheet.getRow(4);
-            headerRow.font = { bold: true };
-            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE7E6E6' } };
-
-            // Add data
-            summary.by_location.forEach((location, index) => {
-                const row = worksheet.addRow({
-                    name: location.name,
-                    user_count: location.user_count,
-                    total_working_days: location.total_working_days,
-                    total_present_days: location.total_present_days,
-                    total_absent_days: location.total_absent_days,
-                    average_attendance: `${location.average_attendance}%`
-                });
-
-                // Color coding for attendance percentage
-                const avgAttendance = parseFloat(location.average_attendance);
-                const attendanceCell = row.getCell('average_attendance');
-
-                if (avgAttendance >= 90) {
-                    attendanceCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD4F4DD' } };
-                } else if (avgAttendance >= 80) {
-                    attendanceCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEAA7' } };
-                } else if (avgAttendance < 70) {
-                    attendanceCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCCCC' } };
-                }
-            });
-        } else {
-            worksheet.getCell('A4').value = 'No location data available';
-        }
-
-        // Area Summary
-        if (summary && summary.by_area && summary.by_area.length > 0) {
-            worksheet.getCell('A' + (summary.by_location.length + 7)).value = 'AREA-WISE SUMMARY';
-            worksheet.getCell('A' + (summary.by_location.length + 7)).font = { bold: true, size: 14 };
-
-            const areaStartRow = summary.by_location.length + 9;
-            worksheet.getRow(areaStartRow).values = ['Area Name', 'Employee Count', 'Total Working Days', 'Total Present Days', 'Total Absent Days', 'Average Attendance %'];
-
-            summary.by_area.forEach((area, index) => {
-                worksheet.addRow([
-                    area.name,
-                    area.user_count,
-                    area.total_working_days,
-                    area.total_present_days,
-                    area.total_absent_days,
-                    `${area.average_attendance}%`
-                ]);
-            });
-        }
-    }
-
-    static async createHolidaySheet(workbook, data, options) {
-        const worksheet = workbook.addWorksheet('Holiday Analysis');
-
-        // Title
-        worksheet.getCell('A1').value = 'HOLIDAY ANALYSIS';
-        worksheet.getCell('A1').font = { size: 16, bold: true };
-
-        // Collect all unique holidays
-        const holidayMap = new Map();
-        data.forEach(user => {
-            if (user.holidays && user.holidays.length > 0) {
-                user.holidays.forEach(holiday => {
-                    if (!holidayMap.has(holiday)) {
-                        holidayMap.set(holiday, {
-                            date: holiday,
-                            employees: []
-                        });
-                    }
-                    holidayMap.get(holiday).employees.push(user.user_name);
-                });
-            }
-        });
-
-        if (holidayMap.size > 0) {
-            // Headers
-            worksheet.getRow(3).values = ['Holiday Date', 'Employee Count', 'Employees'];
-            worksheet.getRow(3).font = { bold: true };
-
-            // Sort holidays by date
-            const sortedHolidays = Array.from(holidayMap.values()).sort((a, b) =>
-                new Date(a.date) - new Date(b.date)
-            );
-
-            let row = 4;
-            sortedHolidays.forEach(holiday => {
-                worksheet.getCell(`A${row}`).value = holiday.date;
-                worksheet.getCell(`B${row}`).value = holiday.employees.length;
-                worksheet.getCell(`C${row}`).value = holiday.employees.join(', ');
-                row++;
-            });
-
-            // Set column widths
-            worksheet.getColumn('A').width = 15;
-            worksheet.getColumn('B').width = 18;
-            worksheet.getColumn('C').width = 50;
-        } else {
-            worksheet.getCell('A3').value = 'No holidays recorded for this period';
-        }
-    }
-
-    static async createPolicySheet(workbook, data, options) {
-        const worksheet = workbook.addWorksheet('Policy Information');
-
-        worksheet.getCell('A1').value = 'ATTENDANCE POLICY INFORMATION';
-        worksheet.getCell('A1').font = { size: 16, bold: true };
-
-        // Legend
-        worksheet.getCell('A3').value = 'Performance Legend:';
-        worksheet.getCell('A3').font = { bold: true };
-
-        const legend = [
-            ['Excellent', '95% and above', 'Green'],
-            ['Good', '85% - 94%', 'Light Green'],
-            ['Average', '75% - 84%', 'Yellow'],
-            ['Below Average', '60% - 74%', 'Orange'],
-            ['Poor', 'Below 60%', 'Red']
-        ];
-
-        legend.forEach((item, index) => {
-            const row = 4 + index;
-            worksheet.getCell(`A${row}`).value = item[0];
-            worksheet.getCell(`B${row}`).value = item[1];
-            worksheet.getCell(`C${row}`).value = item[2];
-
-            // Color the cells according to legend
-            const colorMap = {
-                'Green': 'FFD4F4DD',
-                'Light Green': 'FFE8F5E8',
-                'Yellow': 'FFFFEAA7',
-                'Orange': 'FFFFCC99',
-                'Red': 'FFFFCCCC'
-            };
-
-            if (colorMap[item[2]]) {
-                worksheet.getCell(`A${row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colorMap[item[2]] } };
-            }
-        });
-
-        // Additional information
-        worksheet.getCell('A11').value = 'Report Notes:';
-        worksheet.getCell('A11').font = { bold: true };
-
-        const notes = [
-            '• Working days exclude weekends and assigned holidays',
-            '• Late days count any day with late arrival beyond grace period',
-            '• Overtime is calculated beyond threshold time',
-            '• Attendance percentage = (Present Days / Total Working Days) × 100'
-        ];
-
-        notes.forEach((note, index) => {
-            worksheet.getCell(`A${12 + index}`).value = note;
-        });
-
-        // Set column widths
-        worksheet.getColumn('A').width = 30;
-        worksheet.getColumn('B').width = 20;
-        worksheet.getColumn('C').width = 15;
-    }
-
     // Legacy method for backward compatibility
     static async generateExcel(data, options = {}) {
         return this.generateOrderReport({ users: data }, options);
     }
 
-    static async generateUsersExcel(data, options = {}) {
-        return this.generateUsersReport({ users: data }, options);
-    }
+    // static async generateUsersExcel(data, options = {}) {
+    //     return this.generateUsersReport({ users: data }, options);
+    // }
 }
 
 module.exports = ExcelExportService;

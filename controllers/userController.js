@@ -2,7 +2,8 @@ const asyncHandler = require("../middleware/asyncHandler.js");
 const ErrorResponse = require("../utils/errorresponse.js");
 const db = require("../models/index");
 const { User, Permission, Role } = db;
-
+const Sequelize = require('sequelize');
+const { Op } = Sequelize;
 //@route    /api/users/register
 //@desc     register a user
 //@access   public
@@ -72,6 +73,31 @@ const getProfile = asyncHandler(async (req, res, next) => {
         msg: "User Fetched Successfully!",
         data: user,
     });
+});
+
+//@desc     get profile
+//@route    GET     /api/users/search
+//@access   private
+const getUserBySearch = asyncHandler(async (req, res, next) => {
+    const { q } = req.query;
+    console.log(q)
+    try {
+        const users = await User.findAll({
+            where: {
+                [Op.or]: [
+                    { name: { [Op.like]: `%${q}%` } },
+                    { email: { [Op.like]: `%${q}%` } },
+                    { msisdn: { [Op.like]: `%${q}%` } }
+                ]
+            },
+            attributes: ['id', 'name', 'email', 'msisdn'],
+            // limit: 10
+        });
+        res.json({ success: true, msg: 'Filtered Users', data: users });
+    } catch (error) {
+        res.status(500).json({ msg: 'Error searching users' });
+    }
+
 });
 
 //@route    /api/users/:id/delete
@@ -394,6 +420,28 @@ const deletPermissionPermanently = asyncHandler(async (req, res, next) => {
     });
 })
 
+//@route    /api/pos/users/register
+//@desc     register a user
+//@access   protected by admin
+const registerForPOS = asyncHandler(async (req, res, next) => {
+    const { email, msisdn } = req.body;
+    const isExist = await User.findOne({ where: { [Op.or]: { email, msisdn } } });
+    if (isExist) {
+        return next(new ErrorResponse("User Already Exist", 400));
+    }
+    const user = await User.create({ ...req.body, password: '123456' });
+    if (user) {
+        return res.status(201).json({
+            success: true,
+            msg: "User Creation Successful!",
+            data: user,
+            // token: user.getSignedJwtToken(),
+        });
+    } else {
+        return next(new ErrorResponse("Invalid Data", 400));
+    }
+});
+
 module.exports = {
     register,
     login,
@@ -405,5 +453,7 @@ module.exports = {
     deleteRolePermanently,
     getAllPermissions,
     createPermission,
-    deletPermissionPermanently
+    deletPermissionPermanently,
+    getUserBySearch,
+    registerForPOS
 };

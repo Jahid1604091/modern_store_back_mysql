@@ -9,9 +9,10 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // Category.hasMany(models.Product,{
-
-      // });
+      Category.hasMany(models.Product, {
+        as: 'products',
+        foreignKey: 'category_id'
+      });
     }
   }
   Category.init(
@@ -36,7 +37,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
       },
-      softDeletedAt:{
+      softDeletedAt: {
         type: DataTypes.DATE,
       },
       meta_data: DataTypes.JSON,

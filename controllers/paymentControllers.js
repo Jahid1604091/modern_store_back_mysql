@@ -6,6 +6,7 @@ const asyncHandler = require('../middleware/asyncHandler');
 dotenv.config();
 const db = require("../models/index");
 const ErrorResponse = require('../utils/errorresponse');
+const { or } = require('sequelize');
 const { PaymentDetail, Order } = db;
 const CALLBACK_URL = process.env.NODE_ENV === 'dev' ? process.env.DEV_DOMAIN : process.env.LIVE_DOMAIN;
 const HOST_URL = process.env.NODE_ENV === 'dev' ? process.env.DEV_HOST : process.env.LIVE_HOST;
@@ -34,10 +35,10 @@ const manualPayment = asyncHandler(async function (req, res, next) {
         return next(new ErrorResponse('Order not found', 400));
     }
 
-    if (!acc_no) {
+    if (!payment_medium === 'cod' && !acc_no) {
         return next(new ErrorResponse('Account No not given', 400));
     }
-    //more elaborate about bank info
+    //@more elaborate about bank info
     if (payment_medium === 'bank' && (!bank_details.bank_name || !bank_details.branch || !bank_details.routing_no)) {
         return next(new ErrorResponse('Proper bank details not given', 400));
     }
@@ -70,14 +71,14 @@ const manualPayment = asyncHandler(async function (req, res, next) {
     }
 
     // Overpayment protection
-    if (advance_paid > remaining) {
-        return next(
-            new ErrorResponse(
-                `Payment exceeds remaining amount ${remaining} BDT`,
-                400
-            )
-        );
-    }
+    // if (advance_paid > remaining) {
+    //     return next(
+    //         new ErrorResponse(
+    //             `Payment exceeds remaining amount ${remaining} BDT`,
+    //             400
+    //         )
+    //     );
+    // }
 
     //second /remaining payment
     const exitPayment = await PaymentDetail.findOne({ where: { order_id, user_id: userId } })
@@ -86,7 +87,8 @@ const manualPayment = asyncHandler(async function (req, res, next) {
             order_id,
             user_id: userId,
             payment_medium,
-            advance_paid: exitPayment.payable_amount - advance_paid, // paid THIS time
+            advance_paid: total - exitPayment.advance_paid, // paid THIS time
+            // advance_paid: exitPayment.payable_amount - advance_paid, // paid THIS time
             payable_amount: 0, // remaining after this payment
             trx_id,
             acc_no,
@@ -95,6 +97,13 @@ const manualPayment = asyncHandler(async function (req, res, next) {
             routing_no,
             paid_at: new Date(),
         });
+
+        if (payment) {
+            await Order.update({
+                status: 'processing',
+                payment_status: 'paid'
+            }, { where: { id: order_id } })
+        }
 
         res.status(201).json({
             success: true,
@@ -117,6 +126,13 @@ const manualPayment = asyncHandler(async function (req, res, next) {
             routing_no,
             paid_at: new Date(),
         });
+
+        if (+order.total === +advance_paid) {
+            await Order.update({
+                status: 'processing',
+                payment_status: 'paid'
+            }, { where: { id: order_id } })
+        }
 
         res.status(201).json({
             success: true,

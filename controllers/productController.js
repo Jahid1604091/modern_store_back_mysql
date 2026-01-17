@@ -6,9 +6,7 @@ const path = require('path');
 const Sequelize = require('sequelize');
 const Op = Sequelize.Op;
 const db = require("../models/index");
-const { Product, Category } = db;
-
-// const Brand = db.Brand; // Uncomment when brand model added
+const { Product, Category, Review } = db;
 
 // ------------------------ PUBLIC ----------------------------
 
@@ -21,8 +19,15 @@ const getAllProducts = asyncHandler(async function (req, res) {
   const page = parseInt(req.query.page) || 1;
   const perPage = 10;
   const searchTerm = req.query.q ? req.query.q.trim() : '';
+  const barcode = req.query.barcode ? req.query.barcode.trim() : '';
 
   const where = {};
+
+  // Barcode search (exact match)
+  if (barcode) {
+    where.id = barcode;
+    // where.barcode = barcode;
+  }
 
   // Search functionality
   if (searchTerm) {
@@ -36,16 +41,22 @@ const getAllProducts = asyncHandler(async function (req, res) {
   const total = await Product.count({ where: where });
 
   const products = await Product.findAll({
-    include: [{
-      model: Category,
-      as: 'category',
-      attributes: ['id', 'name'],
-    }],
+    include: [
+      {
+        model: Category,
+        as: 'category',
+        attributes: ['id', 'name'],
+      },
+      {
+        model: Review,
+        as: 'reviews'
+      },
+    ],
     where: where,
     offset: (page - 1) * perPage,
     limit: perPage,
     order: [['createdAt', 'DESC']],
-    attributes: { exclude: ['category_id', 'createdAt', 'updatedAt'] }
+    attributes: { exclude: ['category_id', 'updatedAt'] }
   });
 
   res.status(200).json({
@@ -62,12 +73,18 @@ const getAllProducts = asyncHandler(async function (req, res) {
 // @access   Public
 const getProduct = asyncHandler(async function (req, res, next) {
   const product = await Product.findByPk(req.params.id, {
-    include: [{
-      model: Category,
-      as: 'category',
-      attributes: ['id', 'name'],
-      where: { isActive: true }
-    }],
+    include: [
+      {
+        model: Category,
+        as: 'category',
+        attributes: ['id', 'name'],
+        where: { isActive: true }
+      },
+      {
+        model: Review,
+        as: 'reviews'
+      },
+    ],
   });
   if (!product) {
     return next(new ErrorResponse('Product not found', 404));
@@ -75,6 +92,47 @@ const getProduct = asyncHandler(async function (req, res, next) {
   res.status(200).json({
     success: true,
     data: product,
+  });
+});
+
+// @route    PATCH /api/products/:id/review
+// @desc     add review to product
+// @access   Protected 
+const addReviewToProduct = asyncHandler(async function (req, res, next) {
+  const user_id = req.user.id;
+  const { comment, rating } = req.body;
+
+  if (!rating || !comment) {
+    return next(new ErrorResponse('Please add review and rating', 400))
+  }
+  //check if product exist
+  const product = await Product.findOne({
+    where: { id: req.params.id },
+    include: [
+      {
+        model: Review,
+        as: 'reviews'
+      }
+    ]
+  });
+  if (!product) {
+    return next(new ErrorResponse('Product not found', 404));
+  }
+
+  //check if already reviewed by a user
+  if (product.reviews.find(u => u.user_id === req.user.id)) {
+    return next(new ErrorResponse('You can review a product once', 400))
+  }
+
+
+  const newReview = await Review.create({
+    comment, rating, user_id, product_id: product.id
+  })
+
+  res.status(200).json({
+    success: true,
+    msg: 'Product review added successfully!',
+    data: { review: newReview, product },
   });
 });
 
@@ -91,7 +149,7 @@ const createProduct = asyncHandler(async function (req, res, next) {
     });
   }
 
-  const { name, category_id, gallery, tags, status } = req.body;
+  const { name, category_id, gallery, tags, status, barcode } = req.body;
   const slug = slugify(name, '-');
 
   // Optional category validation
@@ -101,6 +159,16 @@ const createProduct = asyncHandler(async function (req, res, next) {
       return res.status(404).json({
         success: false,
         msg: 'Category not found!',
+      });
+    }
+  }
+  // product barcode validation
+  if (barcode) {
+    const existingProduct = await Product.findOne({ where: { barcode } });
+    if (existingProduct) {
+      return res.status(400).json({
+        success: false,
+        msg: 'Product Already Exist!',
       });
     }
   }
@@ -176,10 +244,26 @@ const deleteProduct = asyncHandler(async function (req, res, next) {
   });
 });
 
+// @route    GET /api/products/pos/:barcode
+// @desc     Get single product
+// @access   Public
+const getProductByBarCode = asyncHandler(async function (req, res, next) {
+  const product = await Product.findOne({ where: { barcode: req.params.barcode } });
+  if (!product) {
+    return next(new ErrorResponse('Product not found', 404));
+  }
+  res.status(200).json({
+    success: true,
+    data: product,
+  });
+});
+
 module.exports = {
   getAllProducts,
   createProduct,
   editProduct,
   deleteProduct,
   getProduct,
+  addReviewToProduct,
+  getProductByBarCode
 };

@@ -8,6 +8,8 @@ const {
   editProduct,
   getAllProducts,
   getProduct,
+  addReviewToProduct,
+  getProductByBarCode,
 } = require('../controllers/productController.js');
 
 const { protect, authorize, optionalAuth } = require('../middleware/authMiddleware.js');
@@ -37,10 +39,13 @@ router
 router
   .route('/:id')
   .get(getProduct)
-  .patch(protect,upload.single('image'), updateValidationRules(), validator,  editProduct)
+  .patch(protect, upload.single('image'), updateValidationRules(), validator, editProduct)
   .delete(protect, deleteProduct);
 
+router.route('/pos/:barcode').get(protect, authorize("admin"), getProductByBarCode)
+
+
 // router.put('/:id/view', incremeentProductView);
-// router.post('/:id/review', protect, addReview);
+router.patch('/:id/review', protect, addReviewToProduct);
 
 module.exports = router;
