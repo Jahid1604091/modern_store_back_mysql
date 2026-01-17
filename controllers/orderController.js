@@ -298,6 +298,11 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
             as: 'product'
           }
         ]
+      },
+      {
+        model:User,
+        as:'user',
+        attributes:['name']
       }
     ],
     attributes: [
