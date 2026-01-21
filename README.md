@@ -26,7 +26,7 @@ Admin - admin@gmail.com | pass - admin@123
 -order list/history
 -wishlist
 -return policy
--size for dress item / publisher - book item etc
+-size for dress item / publisher - book item etc (when ordering select size)
 -dynamic banner/add
 -add/promotion campaign
 -multi currency/language
@@ -40,6 +40,7 @@ Admin - admin@gmail.com | pass - admin@123
 -in app notification
 -multitenancy 
 -image/images upload to server /s3
+-cart should be updated when any products updated
 
 ###Admin
 -caching
@@ -47,3 +48,4 @@ Admin - admin@gmail.com | pass - admin@123
 -barcode scan in/out
 -role based access
 -multi vendor
+-sub category edit option

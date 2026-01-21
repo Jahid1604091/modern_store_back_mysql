@@ -21,7 +21,7 @@ const getAllProducts = asyncHandler(async function (req, res) {
   const searchTerm = req.query.q ? req.query.q.trim() : '';
   const barcode = req.query.barcode ? req.query.barcode.trim() : '';
 
-  const where = {};
+  const where = {status:'active'};
 
   // Barcode search (exact match)
   if (barcode) {
