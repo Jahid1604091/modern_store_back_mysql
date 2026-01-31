@@ -1,7 +1,7 @@
 const express = require('express');
+const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-
 const {
   createProduct,
   deleteProduct,
@@ -16,11 +16,16 @@ const { protect, authorize, optionalAuth } = require('../middleware/authMiddlewa
 const { updateValidationRules } = require('../dtos/productDto.js');
 const validator = require('../middleware/validator.js');
 const router = express.Router();
+const uploadPath = path.join(__dirname, '../images/products');
 
+// ensure directory exists
+if (!fs.existsSync(uploadPath)) {
+  fs.mkdirSync(uploadPath, { recursive: true });
+}
 // Multer storage setup
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'images/products/');
+    cb(null, uploadPath);
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
@@ -28,7 +33,7 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
 // Routes
 router
