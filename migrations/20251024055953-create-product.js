@@ -28,13 +28,6 @@ module.exports = {
 
       category_id: {
         type: Sequelize.INTEGER,
-        references: {
-          model: 'Categories',
-          key: 'id',
-        },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL',
-        
       },
 
       // Pricing info
