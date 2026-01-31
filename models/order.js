@@ -91,7 +91,7 @@ module.exports = (sequelize, DataTypes) => {
     {
       sequelize,
       modelName: 'Order',
-      tableName: 'Orders',
+      tableName: 'orders',
     });
 
   // Associations (future-ready)
