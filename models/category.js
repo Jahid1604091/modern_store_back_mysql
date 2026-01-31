@@ -45,6 +45,7 @@ module.exports = (sequelize, DataTypes) => {
     {
       sequelize,
       modelName: "Category",
+      tableName:'categories',
       hooks: {
         beforeValidate: (category) => {
           if (category.name && !category.slug) {
