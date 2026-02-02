@@ -21,7 +21,7 @@ const getAllProducts = asyncHandler(async function (req, res) {
   const searchTerm = req.query.q ? req.query.q.trim() : '';
   const barcode = req.query.barcode ? req.query.barcode.trim() : '';
 
-  const where = {status:'active'};
+  const where = { status: 'active' };
 
   // Barcode search (exact match)
   if (barcode) {
@@ -177,7 +177,9 @@ const createProduct = asyncHandler(async function (req, res, next) {
   const product = await Product.create({
     ...req.body,
     slug,
-    image: req.file.path.replace(/\\/g, '/'),
+    image: req.file
+      ? `images/products/${req.file.filename}`
+      : null,
     gallery: gallery ? JSON.parse(gallery) : [],
     tags: tags ? JSON.parse(tags) : [],
     status: status ? 'active' : 'inactive'
