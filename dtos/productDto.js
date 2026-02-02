@@ -2,7 +2,7 @@ const { body } = require('express-validator');
 const db = require("../models/index");
 const { Product } = db;
 
-const updateValidationRules = () => {
+const createValidationRules = () => {
   return [
     body('name')
       .trim()
@@ -21,4 +21,4 @@ const updateValidationRules = () => {
 };
 
 
-module.exports = { updateValidationRules }
+module.exports = { createValidationRules }

@@ -13,7 +13,7 @@ const {
 } = require('../controllers/productController.js');
 
 const { protect, authorize, optionalAuth } = require('../middleware/authMiddleware.js');
-const { updateValidationRules } = require('../dtos/productDto.js');
+const { updateValidationRules, createValidationRules } = require('../dtos/productDto.js');
 const validator = require('../middleware/validator.js');
 const router = express.Router();
 const uploadPath = path.join(__dirname, '../images/products');
@@ -39,12 +39,12 @@ const upload = multer({ storage });
 router
   .route('/')
   .get(getAllProducts)
-  .post(protect, upload.single('image'), createProduct);
+  .post(protect, upload.single('image'), createValidationRules(), validator, createProduct);
 
 router
   .route('/:id')
   .get(getProduct)
-  .patch(protect, upload.single('image'), updateValidationRules(), validator, editProduct)
+  .patch(protect, upload.single('image'),  editProduct)
   .delete(protect, deleteProduct);
 
 router.route('/pos/:barcode').get(protect, authorize("admin"), getProductByBarCode)

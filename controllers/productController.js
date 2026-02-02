@@ -185,7 +185,7 @@ const createProduct = asyncHandler(async function (req, res, next) {
     status: status ? 'active' : 'inactive'
   });
 
-  res.status(201).json({
+  res.status(200).json({
     success: true,
     msg: 'Product created successfully!',
     data: product,
@@ -203,14 +203,24 @@ const editProduct = asyncHandler(async function (req, res, next) {
 
   const body = req.body;
   // Handle image replacement
+
   if (req.file) {
+    // delete old image from disk
+
+
     if (product.image) {
-      const oldPath = path.join(__dirname, '..', product.image);
-      fs.unlink(oldPath, function (err) {
-        if (err) console.error('Error deleting old image:', err);
+      const oldPath = path.join(
+        process.cwd(),        // project root
+        product.image         // /images/products/xxx.jpg
+      );
+
+      fs.unlink(oldPath, (err) => {
+        if (err) console.error('Error deleting old image:', err.message);
       });
     }
-    body.image = req.file.path.replace(/\\/g, '/');
+
+    // store public path in DB
+    body.image = `images/products/${req.file.filename}`;
   }
 
   // If name changed, regenerate slug
