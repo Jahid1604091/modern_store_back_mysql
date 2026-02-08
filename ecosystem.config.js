@@ -3,7 +3,7 @@ module.exports = {
     {
       name: "modern-store-back",          // change app name
       script: "index.js",           // entry file (app.js / index.js / server.js)
-      instances: "max",              // use all CPU cores
+      instances: 1,              // use all CPU cores = 'max'
       exec_mode: "cluster",          // cluster mode for production
       watch: false,                  // turn on only for development
       autorestart: true,
