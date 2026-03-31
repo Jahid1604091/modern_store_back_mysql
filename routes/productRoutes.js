@@ -44,7 +44,7 @@ router
 router
   .route('/:id')
   .get(getProduct)
-  .patch(protect, upload.single('image'),  editProduct)
+  .patch(protect, upload.single('image'),editProduct)
   .delete(protect, deleteProduct);
 
 router.route('/pos/:barcode').get(protect, authorize("admin"), getProductByBarCode)

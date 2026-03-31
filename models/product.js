@@ -107,6 +107,9 @@ module.exports = (sequelize, DataTypes) => {
       tags: {
         type: DataTypes.JSON, // array of strings
       },
+      metadata: {
+        type: DataTypes.JSON, // array of strings
+      },
       status: {
         type: DataTypes.ENUM('active', 'inactive', 'draft'),
         defaultValue: 'active',
