@@ -41,6 +41,8 @@ Admin - admin@gmail.com | pass - admin@123
 -multitenancy 
 -image/images upload to server /s3
 -cart should be updated when any products updated
+-how many people currently watching
+-moving avg price
 
 ###Admin
 -caching
@@ -49,3 +51,10 @@ Admin - admin@gmail.com | pass - admin@123
 -role based access
 -multi vendor
 -sub category edit option
+
+###Company Details
+-company_name, logo, currency, address, is_active, details, tag_line, no_customers, about_company, social_links:{ fb, linkedin, x, ytube, instagram }, contact:{support_email, contact_email, support_mobile,contact_mobile }, t&c, privacy_policy ,
+faq:[{}],return_refund_policy, shipping_info
+
+###Company Branch
+-branch_name, company_id, address, is_active

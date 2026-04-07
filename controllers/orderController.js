@@ -9,6 +9,7 @@ const dayjs = require("dayjs");
 const ExcelExportService = require("../services/ExcelExportService");
 const ErrorResponse = require("../utils/errorresponse");
 const DateUtils = require("../utils/DateUtils");
+const sendMail = require("../utils/sendEmail");
 
 
 //--------------------------------------------------------------
@@ -19,7 +20,7 @@ const DateUtils = require("../utils/DateUtils");
 // @desc     Create a new order
 // @access   Protected
 exports.createOrder = asyncHandler(async (req, res) => {
-  const { orderItems = [], discount } = req.body;
+  const { orderItems = [], discount = 0 } = req.body;
 
   if (!orderItems.length) {
     return res.status(400).json({
@@ -35,12 +36,10 @@ exports.createOrder = asyncHandler(async (req, res) => {
        1. Fetch products from DB
     ============================ */
     const productIds = orderItems.map(item => item.id);
-
     const products = await Product.findAll({
       where: { id: productIds },
       transaction,
     });
-
     if (products.length !== productIds.length) {
       throw new Error("One or more products not found");
     }
@@ -74,19 +73,19 @@ exports.createOrder = asyncHandler(async (req, res) => {
     ============================ */
     //@ add these in DB
     const SHIPPING_COST = 100;
-    const TAX_PERCENT = 5;
+    // const TAX_PERCENT = 5;
     const DISCOUNT_PERCENT = 10;
     const FREE_SHIPPING_MIN = 1000;
 
     // const discount = Math.round((subtotal * DISCOUNT_PERCENT) / 100);
     const taxableAmount = subtotal - discount;
-    const tax = Math.round((taxableAmount * TAX_PERCENT) / 100);
+    // const tax = Math.round((taxableAmount * TAX_PERCENT) / 100);
 
     const shipping_cost =
       taxableAmount >= FREE_SHIPPING_MIN ? 0 : SHIPPING_COST;
 
-    const total = taxableAmount + tax + shipping_cost;
-
+    const total = taxableAmount + shipping_cost;
+    console.log(subtotal, taxableAmount, shipping_cost, total) //233 NaN 100 NaN
     /* ============================
        4. Create Order
     ============================ */
@@ -95,7 +94,7 @@ exports.createOrder = asyncHandler(async (req, res) => {
         user_id: req.user.id,
         subtotal,
         discount: +discount,
-        tax, //add this column later
+        // tax, //add this column later
         shipping_cost,
         total,
         shipping_address: req.body.shippingAddress,
@@ -115,6 +114,34 @@ exports.createOrder = asyncHandler(async (req, res) => {
 
     await OrderItem.bulkCreate(processedOrderItems, { transaction });
 
+    /* ============================
+         6. Update Stock & Trigger Low Stock Alerts
+      ============================ */
+    for (const item of processedOrderItems) {
+      const product = productMap[item.product_id];
+
+      // Reduce stock
+      product.stock_quantity -= item.order_quantity;
+
+      // Save updated stock
+      await product.save({ transaction });
+
+      // Trigger stock alert if below threshold
+      if (product.stock_quantity <= product.min_stock_threshold) {
+        //send notification
+        const message = `${product.name} remains only ${product.stock_quantity} [${product.min_stock_threshold}], Please Restock!`
+        await sendMail({
+          email: 'jh409780@gmail.com',
+          subject: 'Low Stock Alert',
+          message
+        })
+        // await stockAlert(product); 
+      }
+    }
+
+    /* ============================
+       7. Commit Transaction
+    ============================ */
     await transaction.commit();
 
     res.status(201).json({
@@ -300,9 +327,9 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
         ]
       },
       {
-        model:User,
-        as:'user',
-        attributes:['name']
+        model: User,
+        as: 'user',
+        attributes: ['name']
       }
     ],
     attributes: [
@@ -574,8 +601,11 @@ exports.getOrder = asyncHandler(async (req, res) => {
     include: [
       { model: User, as: 'user', attributes: ["id", "name", "email"] },
       { model: OrderItem, as: 'items', attributes: { exclude: ["createdAt", "updatedAt"] }, include: { model: Product, as: 'product', attributes: ['id', 'name', 'price', 'image'] } },
+      { model:PaymentDetail, as: 'payment_details', limit: 1 }
     ],
   });
+
+  //@retrieve only paid at column 
 
   res.status(200).json({
     success: true,

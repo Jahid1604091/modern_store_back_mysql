@@ -13,58 +13,94 @@ const { Product, Category, Review } = db;
 // @route    GET /api/products?q=term&page=1
 // @desc     Get all products (with pagination and search)
 // @access   Public
-
-
-const getAllProducts = asyncHandler(async function (req, res) {
+const getAllProducts = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const perPage = 10;
-  const searchTerm = req.query.q ? req.query.q.trim() : '';
-  const barcode = req.query.barcode ? req.query.barcode.trim() : '';
 
-  const where = { status: 'active' };
+  const { company_id, q, barcode, categories, min_price, max_price, sort } = req.query;
 
-  // Barcode search (exact match)
+  const productWhere = {
+    status: "active",
+    company_id: company_id || 1
+  };
+
+  const categoryWhere = {};
+
+  // Barcode search
   if (barcode) {
-    where.id = barcode;
-    // where.barcode = barcode;
+    productWhere.barcode = barcode.trim();
   }
 
-  // Search functionality
-  if (searchTerm) {
-    where[Op.or] = [
-      { name: { [Op.like]: '%' + searchTerm + '%' } },
-      { description: { [Op.like]: '%' + searchTerm + '%' } },
+  // Search by name/description
+  if (q && q.trim()) {
+    productWhere[Op.or] = [
+      { name: { [Op.like]: `%${q.trim()}%` } },
+      { description: { [Op.like]: `%${q.trim()}%` } },
     ];
   }
 
-  // Total count
-  const total = await Product.count({ where: where });
+  // Category filter
+  if (categories) {
+    const categoryList = categories.split(',').map(c => c.trim());
+    categoryWhere.name = {
+      [Op.in]: categoryList
+    };
+  }
 
-  const products = await Product.findAll({
+  //search by price range
+  if (min_price || max_price) {
+    productWhere.price = {};
+    if (min_price) productWhere.price[Op.gte] = Number(min_price);
+    if (max_price) productWhere.price[Op.lte] = Number(max_price);
+  }
+
+  //sorting
+  const sortMap = {
+    name_asc: ["name", "ASC"],
+    name_desc: ["name", "DESC"],
+    price_low: ["price", "ASC"],
+    price_high: ["price", "DESC"],
+    newest: ["createdAt", "DESC"],
+  };
+
+  let order = [["createdAt", "DESC"]];
+
+  if (req.query.sort) {
+    const sorts = sort.split(",");
+    order = sorts.map((s) => sortMap[s]).filter(Boolean);
+  }
+
+  const queryOptions = {
+    where: productWhere,
     include: [
       {
         model: Category,
-        as: 'category',
-        attributes: ['id', 'name'],
+        as: "category",
+        attributes: ["id", "name"],
+        where: Object.keys(categoryWhere).length ? categoryWhere : undefined,
+        required: !!categories, // inner join only if category filter exists
       },
       {
         model: Review,
-        as: 'reviews'
+        as: "reviews",
       },
     ],
-    where: where,
-    offset: (page - 1) * perPage,
+    attributes: { exclude: ["category_id", "updatedAt"] },
+    order,
     limit: perPage,
-    order: [['createdAt', 'DESC']],
-    attributes: { exclude: ['category_id', 'updatedAt'] }
-  });
+    offset: (page - 1) * perPage,
+    distinct: true,
+  };
+
+  const { count, rows: products } = await Product.findAndCountAll(queryOptions);
 
   res.status(200).json({
     success: true,
-    count: total,
+    count: products.length,
+    total: count,
     data: products,
-    page: page,
-    pages: Math.ceil(total / perPage),
+    page,
+    pages: Math.ceil(count / perPage),
   });
 });
 
@@ -196,14 +232,15 @@ const createProduct = asyncHandler(async function (req, res, next) {
 // @desc     Update product
 // @access   Protected (Admin)
 const editProduct = asyncHandler(async function (req, res, next) {
+
   const product = await Product.findByPk(req.params.id);
   if (!product) {
     return next(new ErrorResponse('Product not found', 404));
   }
 
   const body = req.body;
-  // Handle image replacement
 
+  // Handle image replacement
   if (req.file) {
     // delete old image from disk
 
@@ -211,7 +248,7 @@ const editProduct = asyncHandler(async function (req, res, next) {
     if (product.image) {
       const oldPath = path.join(
         process.cwd(),        // project root
-        product.image         // /images/products/xxx.jpg
+        product.image         // /images/products/xyz.jpg
       );
 
       fs.unlink(oldPath, (err) => {
