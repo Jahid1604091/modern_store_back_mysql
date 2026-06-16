@@ -1,5 +1,5 @@
 const asyncHandler = require("../middleware/asyncHandler.js");
-const { Category } = require("../models");
+const { Category, Product, sequelize } = require("../models");
 const slugify = require("slugify");
 const ErrorResponse = require("../utils/errorresponse.js");
 
@@ -50,16 +50,38 @@ exports.getCategories = asyncHandler(async (req, res, next) => {
   if (!req.user || req.user.role !== "admin") {
     whereCondition.isActive = true;
   }
+const categories = await Category.findAll({
+  attributes: [
+    'id',
+    'name',
+    'slug',
+    'isActive',
+    'parentId',
+    [
+      sequelize.fn('COUNT', sequelize.col('products.id')),
+      'productCount'
+    ]
+  ],
+  include: [
+    {
+      model: Product,
+      as: 'products',
+      attributes: [],
+      required: false
+    }
+  ],
+  where: whereCondition,
+  group: ['Category.id'],
+  order: [['id', 'ASC']],
+  raw: true,         
+});
 
-  const categories = await Category.findAll({
-    where: whereCondition,
-    order: [["id", "ASC"]],
-  });
 
   if (!categories.length) {
     return next(new ErrorResponse("No Category Found!", 404));
   }
 
+  // return res.json(categories)
   const refinedCategories = formatCategories(categories);
 
   res.status(200).json({
@@ -122,12 +144,13 @@ exports.deleteCategory = asyncHandler(async (req, res, next) => {
 //--------------------------------------------------------------
 function formatCategories(categories, parentId = null) {
   return categories
-    .filter((cat) => cat.parentId === parentId)
-    .map((cat) => ({
+    .filter(cat => cat.parentId === parentId)
+    .map(cat => ({
       _id: cat.id,
       name: cat.name,
       slug: cat.slug,
       isActive: cat.isActive,
+      productCount: Number(cat.productCount) || 0,
       subcategories: formatCategories(categories, cat.id),
     }));
 }

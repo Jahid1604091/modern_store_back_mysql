@@ -38,6 +38,7 @@ module.exports = (sequelize, DataTypes) => {
   User.init({
     name: DataTypes.STRING,
     email: DataTypes.STRING,
+    msisdn: DataTypes.STRING,
     password: {
       type: DataTypes.STRING,
       allowNull: false,

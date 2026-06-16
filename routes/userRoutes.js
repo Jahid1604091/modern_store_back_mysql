@@ -1,5 +1,5 @@
 const express = require('express');
-const { getProfile, login, register, getAllPermissions, createPermission, deletPermissionPermanently, getAllRoles, createRole, editRole, deleteRolePermanently } = require('../controllers/userController.js');
+const { getProfile, login, register, getAllPermissions, createPermission, deletPermissionPermanently, getAllRoles, createRole, editRole, deleteRolePermanently, getUserBySearch, registerForPOS } = require('../controllers/userController.js');
 const { protect, authorize } = require('../middleware/authMiddleware.js');
 const loginValidationRules = require('../dtos/loginDto.js');
 const { createPermissiomValidationRules, deletePermissionValidationRules } = require('../dtos/permissionDto.js');
@@ -10,6 +10,8 @@ const router = express.Router();
 
 router.route('/register').post(register)
 router.route('/profile').get(protect, getProfile)
+router.route('/pos/register').post(protect, authorize('admin', 'super-admin'), registerForPOS)
+router.route('/pos/search').get(protect, authorize('admin', 'super-admin'), getUserBySearch)
 /* -------------------- AUTH -------------------- */
 router.post('/login', loginValidationRules(), validator, login);
 

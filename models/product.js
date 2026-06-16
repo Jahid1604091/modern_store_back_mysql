@@ -4,11 +4,15 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Product extends Model {
     static associate(models) {
-      // Future associations — uncomment when Brand and Vendor models exist
 
       Product.belongsTo(models.Category, {
         foreignKey: 'category_id',
         as: 'category',
+      });
+
+      Product.hasMany(models.Review, {
+        foreignKey: 'product_id',
+        as: 'reviews',
       });
 
       // Product.belongsTo(models.Vendor, {
@@ -65,6 +69,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         defaultValue: 0,
       },
+      min_stock_threshold: {
+        type: DataTypes.INTEGER,
+        defaultValue: 1,
+      },
       sku: {
         type: DataTypes.STRING(100),
         unique: true,
@@ -87,12 +95,19 @@ module.exports = (sequelize, DataTypes) => {
       image: {
         type: DataTypes.STRING,
       },
+
+      barcode: {
+        type: DataTypes.STRING,
+      },
       gallery: {
         type: DataTypes.JSON, // multiple images as array
       },
 
       // Metadata
       tags: {
+        type: DataTypes.JSON, // array of strings
+      },
+      metadata: {
         type: DataTypes.JSON, // array of strings
       },
       status: {
@@ -107,7 +122,7 @@ module.exports = (sequelize, DataTypes) => {
     {
       sequelize,
       modelName: 'Product',
-      tableName: 'Products',
+      tableName: 'products',
     }
   );
 
