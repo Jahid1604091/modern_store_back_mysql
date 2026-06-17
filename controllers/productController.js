@@ -103,6 +103,19 @@ const getAllProducts = asyncHandler(async (req, res) => {
     distinct: true,
   });
 
+  // Min/max price across the catalog (ignores search/category/price filters
+  // so the storefront's price-range slider bounds stay stable as the user filters).
+  const priceBoundsWhere = { company_id };
+  if (!isAdmin) priceBoundsWhere.status = "active";
+  const [minPrice, maxPrice] = await Promise.all([
+    Product.min('price', { where: priceBoundsWhere }),
+    Product.max('price', { where: priceBoundsWhere }),
+  ]);
+  const price_bounds = {
+    min: minPrice != null ? Math.floor(Number(minPrice)) : 0,
+    max: maxPrice != null ? Math.ceil(Number(maxPrice)) : 1000,
+  };
+
   let stock_summary;
   if (isAdmin) {
     const baseWhere = { company_id };
@@ -132,6 +145,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
     data: products,
     page,
     pages: Math.ceil(count / perPage),
+    price_bounds,
     ...(stock_summary ? { stock_summary } : {}),
   });
 });
