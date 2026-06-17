@@ -43,6 +43,7 @@ const protect = asyncHandler(async (req, res, next) => {
         }
 
         req.user = user;
+        req.isPlatformAdmin = user.company_id == null;
         next();
     } catch (error) {
         return next(new ErrorResponse('Unauthorized user', 401));
@@ -63,7 +64,7 @@ const optionalAuth = asyncHandler(async (req, res, next) => {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const user = await User.findOne({
-            where: { email: decoded.email },
+            where: { id: decoded.id },
             include: {
                 model: Role,
                 as: 'roles',
@@ -72,7 +73,8 @@ const optionalAuth = asyncHandler(async (req, res, next) => {
             },
         });
 
-        req.user = user;
+        req.user = user || null;
+        req.isPlatformAdmin = user ? user.company_id == null : false;
         next();
     } catch (error) {
         req.user = null;
@@ -82,6 +84,11 @@ const optionalAuth = asyncHandler(async (req, res, next) => {
 
 const authorize = (...allowedRoles) => {
     return (req, res, next) => {
+        // Platform admin (company_id === null) bypasses all role checks.
+        if (req.user && req.user.company_id == null) {
+            return next();
+        }
+
         if (!req.user || !req.user.roles) {
             return next(new ErrorResponse('Access denied. No role assigned.', 403));
         }
@@ -105,6 +112,11 @@ const authorize = (...allowedRoles) => {
 const checkPermission = (permissionKeys, requireAll = false) => {
   return async (req, res, next) => {
     try {
+      // Platform admin (company_id === null) bypasses all permission checks.
+      if (req.user && req.user.company_id == null) {
+        return next();
+      }
+
       // Check if user exists and has roles
       if (!req.user || !req.user.roles || !Array.isArray(req.user.roles) || req.user.roles.length === 0) {
         return next(new ErrorResponse('Access denied. No roles found.', 403));
@@ -166,9 +178,21 @@ const checkPermission = (permissionKeys, requireAll = false) => {
   };
 };
 
+// Allows only users with no company_id (the platform system admin)
+const platformAdminOnly = (req, res, next) => {
+    if (!req.user) {
+        return next(new ErrorResponse('Please login first', 401));
+    }
+    if (req.user.company_id !== null && req.user.company_id !== undefined) {
+        return next(new ErrorResponse('Access denied. Platform admin only.', 403));
+    }
+    next();
+};
+
 module.exports = {
     protect,
     authorize,
     optionalAuth,
-    checkPermission
+    checkPermission,
+    platformAdminOnly,
 };

@@ -4,7 +4,6 @@ module.exports = (sequelize, DataTypes) => {
     company_id: {
       type: DataTypes.INTEGER,
       allowNull: true,
-      defaultValue: 1,
     },
 
     user_id: {
@@ -96,6 +95,7 @@ module.exports = (sequelize, DataTypes) => {
 
   // Associations (future-ready)
   Order.associate = function (models) {
+    Order.belongsTo(models.Company, { foreignKey: 'company_id', as: 'company' });
     Order.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
     Order.hasMany(models.OrderItem, { foreignKey: 'order_id', as: 'items' });
     Order.hasMany(models.PaymentDetail, { foreignKey: 'order_id', as: 'payment_details' });

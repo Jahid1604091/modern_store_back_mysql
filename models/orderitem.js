@@ -35,6 +35,10 @@ module.exports = (sequelize, DataTypes) => {
       unit_price: {
         type: DataTypes.DECIMAL(5, 2)
       },
+      selected_size: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+      },
   }, {
     sequelize,
     modelName: 'OrderItem',

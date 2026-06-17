@@ -10,6 +10,7 @@ const ExcelExportService = require("../services/ExcelExportService");
 const ErrorResponse = require("../utils/errorresponse");
 const DateUtils = require("../utils/DateUtils");
 const sendMail = require("../utils/sendEmail");
+const { companyScopeWhere, resolveCompanyId } = require("../utils/companyScope");
 
 
 //--------------------------------------------------------------
@@ -65,6 +66,7 @@ exports.createOrder = asyncHandler(async (req, res) => {
         product_id: product.id,
         unit_price: unitPrice,
         order_quantity: item.qty,
+        selected_size: item.size || null,
       };
     });
 
@@ -92,6 +94,7 @@ exports.createOrder = asyncHandler(async (req, res) => {
     const newOrder = await Order.create(
       {
         user_id: req.user.id,
+        company_id: req.user.company_id,
         subtotal,
         discount: +discount,
         // tax, //add this column later
@@ -170,7 +173,7 @@ exports.getMyOrders = asyncHandler(async (req, res) => {
       {
         model: OrderItem,
         as: 'items',
-        attributes: ['order_quantity', 'unit_price'],
+        attributes: ['order_quantity', 'unit_price', 'selected_size'],
         include: [{
           model: Product,
           as: 'product',
@@ -201,7 +204,7 @@ exports.getMyOrder = asyncHandler(async (req, res) => {
       {
         model: OrderItem,
         as: 'items',
-        attributes: ['order_quantity', 'unit_price'],
+        attributes: ['order_quantity', 'unit_price', 'selected_size'],
         include: [{
           model: Product,
           as: 'product',
@@ -308,11 +311,11 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
   const page = Number(req.query.page) || 1;
   const offset = per_page * (page - 1);
 
-  const where = {
+  const where = companyScopeWhere(req, {
     createdAt: {
       [Op.between]: [new Date(startDate), new Date(endDate)],
     },
-  };
+  });
 
   const { rows, count } = await Order.findAndCountAll({
     include: [
@@ -446,11 +449,11 @@ exports.getSalesReport = asyncHandler(async (req, res) => {
   const page = Number(req.query.page) || 1;
   const offset = per_page * (page - 1);
 
-  const where = {
+  const where = companyScopeWhere(req, {
     createdAt: {
       [Op.between]: [new Date(start), new Date(end)],
     },
-  };
+  });
 
   const { rows, count } = await Order.findAndCountAll({
     include: [
@@ -641,10 +644,12 @@ exports.updateToDelivered = asyncHandler(async (req, res) => {
 // @desc     Get summary of all orders and others
 // @access   Admin
 exports.getOrdersOverview = asyncHandler(async (req, res) => {
+  const where = companyScopeWhere(req);
   const { count, rows } = await Product.findAndCountAll({
-    where: { stock_quantity: { [Op.lt]: sequelize.col('min_stock_threshold'), } }
+    where: { ...where, stock_quantity: { [Op.lt]: sequelize.col('min_stock_threshold'), } }
   });
   const overview = await Order.findOne({
+    where,
     attributes: [
       [sequelize.fn("SUM", sequelize.col("Order.total")), "totalPrice"],
       [sequelize.fn("COUNT", sequelize.col("Order.id")), "totalOrders"],
@@ -777,6 +782,7 @@ exports.createOrderForPOS = asyncHandler(async (req, res) => {
         product_id: product.id,
         unit_price: unitPrice,
         order_quantity: item.qty,
+        selected_size: item.size || null,
       };
     });
 
@@ -803,6 +809,7 @@ exports.createOrderForPOS = asyncHandler(async (req, res) => {
     const newOrder = await Order.create(
       {
         user_id: userId,
+        company_id: resolveCompanyId(req),
         subtotal,
         discount,
         tax,

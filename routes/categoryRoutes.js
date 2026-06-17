@@ -8,6 +8,6 @@ router.route('/').post(protect, createCategory);
 router.route('/:id').delete(protect, deleteCategory);
 router.route('/:id').patch(protect, editCategory);
 
-router.route('/').get(getCategories);
+router.route('/').get(optionalAuth, getCategories);
 
 module.exports =  router

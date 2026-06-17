@@ -5,6 +5,11 @@ module.exports = (sequelize, DataTypes) => {
   class Product extends Model {
     static associate(models) {
 
+      Product.belongsTo(models.Company, {
+        foreignKey: 'company_id',
+        as: 'company',
+      });
+
       Product.belongsTo(models.Category, {
         foreignKey: 'category_id',
         as: 'category',
@@ -15,10 +20,10 @@ module.exports = (sequelize, DataTypes) => {
         as: 'reviews',
       });
 
-      // Product.belongsTo(models.Vendor, {
-      //   foreignKey: 'vendor_id',
-      //   as: 'vendor_info',
-      // });
+      Product.hasMany(models.StockAdjustment, {
+        foreignKey: 'product_id',
+        as: 'stock_adjustments',
+      });
     }
   }
 
@@ -40,7 +45,6 @@ module.exports = (sequelize, DataTypes) => {
       company_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        defaultValue: 1,
       },
       
       // Category info

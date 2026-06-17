@@ -93,8 +93,11 @@ const invoiceGenerate = (order, filePath, dataCallback, endCallback) => {
 
   order.items.forEach((item) => {
     const total = item.order_quantity * item.unit_price;
+    const itemLabel = item.selected_size
+      ? `${item.product.name} (Size: ${item.selected_size})`
+      : item.product.name;
 
-    doc.text(item.product.name, itemX, positionY, { width: 220 });
+    doc.text(itemLabel, itemX, positionY, { width: 220 });
     doc.text(item.order_quantity, qtyX, positionY);
     doc.text(`BDT ${item.unit_price}`, priceX, positionY);
     doc.text(`BDT ${total}`, totalX, positionY);

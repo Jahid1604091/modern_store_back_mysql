@@ -10,9 +10,12 @@ const {
   getProduct,
   addReviewToProduct,
   getProductByBarCode,
+  adjustStock,
+  getStockHistory,
 } = require('../controllers/productController.js');
 
 const { protect, authorize, optionalAuth } = require('../middleware/authMiddleware.js');
+const { resolveTenant, checkProductQuota } = require('../middleware/tenantMiddleware.js');
 const { updateValidationRules, createValidationRules } = require('../dtos/productDto.js');
 const validator = require('../middleware/validator.js');
 const router = express.Router();
@@ -33,19 +36,31 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024, files: 5 },
+  fileFilter: (req, file, cb) => {
+    if (!/^image\//.test(file.mimetype)) {
+      return cb(new Error('Only image files are allowed.'));
+    }
+    cb(null, true);
+  },
+});
 
 // Routes
 router
   .route('/')
-  .get(getAllProducts)
-  .post(protect, upload.single('image'), createValidationRules(), validator, createProduct);
+  .get(optionalAuth, getAllProducts)
+  .post(protect, resolveTenant, checkProductQuota, upload.array('images', 5), createValidationRules(), validator, createProduct);
 
 router
   .route('/:id')
   .get(getProduct)
-  .patch(protect, upload.single('image'),editProduct)
+  .patch(protect, upload.array('images', 5), editProduct)
   .delete(protect, deleteProduct);
+
+router.route('/:id/stock').patch(protect, authorize('admin', 'super-admin'), adjustStock);
+router.route('/:id/stock-history').get(protect, getStockHistory);
 
 router.route('/pos/:barcode').get(protect, authorize("admin"), getProductByBarCode)
 
