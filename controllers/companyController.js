@@ -4,6 +4,8 @@ const { Company, User, Role, UserRole } = db;
 const ErrorResponse = require("../utils/errorresponse.js");
 const { Op, fn, col } = require("sequelize");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 const sendMail = require("../utils/sendEmail.js");
 const PLANS = require("../config/plans.js");
 
@@ -244,6 +246,19 @@ exports.updateMyCompany = asyncHandler(async (req, res, next) => {
 
   // Prevent tenants from changing subscription fields directly
   const { subscription_plan, subscription_status, trial_ends_at, ...safeBody } = req.body;
+
+  if (typeof safeBody.social_links === "string") {
+    safeBody.social_links = JSON.parse(safeBody.social_links);
+  }
+
+  if (req.file) {
+    if (company.logo) {
+      fs.unlink(path.join(process.cwd(), company.logo), (err) => {
+        if (err) console.error("Error deleting old logo:", err.message);
+      });
+    }
+    safeBody.logo = `images/company/${req.file.filename}`;
+  }
 
   await company.update(safeBody);
 
