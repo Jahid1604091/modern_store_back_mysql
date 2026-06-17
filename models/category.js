@@ -36,6 +36,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
       },
+      image: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       softDeletedAt: {
         type: DataTypes.DATE,
       },

@@ -13,6 +13,16 @@ function toSubdomain(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63);
 }
 
+// Decrypted secrets must never round-trip to the client; expose only whether they're set.
+function maskCourierSecrets(company) {
+  const data = company.toJSON();
+  data.steadfast_api_key_set = !!company.steadfast_api_key;
+  data.steadfast_secret_key_set = !!company.steadfast_secret_key;
+  delete data.steadfast_api_key;
+  delete data.steadfast_secret_key;
+  return data;
+}
+
 // @route  GET /api/companies/resolve?subdomain=xxx
 // @desc   Resolve a subdomain to its company's public info (used by storefront on load)
 // @access Public
@@ -24,7 +34,7 @@ exports.resolveCompany = asyncHandler(async (req, res, next) => {
     where: { subdomain: subdomain.toLowerCase().trim(), is_active: true },
     attributes: ['id', 'company_name', 'subdomain', 'tag_line', 'logo', 'currency', 'address',
       'details', 'about_company', 'contact', 'social_links', 'payment_methods',
-      'return_refund_policy', 'shipping_info', 't_and_c', 'privacy_policy'],
+      'return_refund_policy', 'shipping_info', 't_and_c', 'privacy_policy', 'faq'],
   });
 
   if (!company) return next(new ErrorResponse('Company not found.', 404));
@@ -234,7 +244,7 @@ exports.getMyCompany = asyncHandler(async (req, res, next) => {
   const company = await Company.findByPk(req.user.company_id);
   if (!company) return next(new ErrorResponse("Company not found!", 404));
 
-  res.status(200).json({ success: true, data: company });
+  res.status(200).json({ success: true, data: maskCourierSecrets(company) });
 });
 
 // @route  PATCH /api/companies/me
@@ -250,6 +260,18 @@ exports.updateMyCompany = asyncHandler(async (req, res, next) => {
   if (typeof safeBody.social_links === "string") {
     safeBody.social_links = JSON.parse(safeBody.social_links);
   }
+  if (typeof safeBody.contact === "string") {
+    safeBody.contact = JSON.parse(safeBody.contact);
+  }
+  if (typeof safeBody.payment_methods === "string") {
+    safeBody.payment_methods = JSON.parse(safeBody.payment_methods);
+  }
+  if (typeof safeBody.courier_settings === "string") {
+    safeBody.courier_settings = JSON.parse(safeBody.courier_settings);
+  }
+  // Blank/omitted secret fields mean "leave unchanged" - never overwrite with empty.
+  if (!safeBody.steadfast_api_key) delete safeBody.steadfast_api_key;
+  if (!safeBody.steadfast_secret_key) delete safeBody.steadfast_secret_key;
 
   if (req.file) {
     if (company.logo) {
@@ -262,7 +284,7 @@ exports.updateMyCompany = asyncHandler(async (req, res, next) => {
 
   await company.update(safeBody);
 
-  res.status(200).json({ success: true, msg: "Company updated successfully!", data: company });
+  res.status(200).json({ success: true, msg: "Company updated successfully!", data: maskCourierSecrets(company) });
 });
 
 // @route  PATCH /api/companies/:id

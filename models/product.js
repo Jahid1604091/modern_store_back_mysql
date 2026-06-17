@@ -107,6 +107,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.JSON, // multiple images as array
       },
 
+      tryon_image: {
+        type: DataTypes.STRING, // transparent PNG cutout used for client-side try-on overlay
+        allowNull: true,
+      },
+
       // Metadata
       tags: {
         type: DataTypes.JSON, // array of strings

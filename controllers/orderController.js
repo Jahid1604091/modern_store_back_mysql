@@ -1,5 +1,5 @@
 const asyncHandler = require("../middleware/asyncHandler");
-const { Order, Product, User, OrderItem, PaymentDetail, sequelize, Sequelize } = require("../models");
+const { Order, Product, User, OrderItem, PaymentDetail, Company, sequelize, Sequelize } = require("../models");
 const path = require("path");
 const fs = require("fs");
 const { invoiceGenerate } = require("../utils/invoiceGenerate");
@@ -11,6 +11,10 @@ const ErrorResponse = require("../utils/errorresponse");
 const DateUtils = require("../utils/DateUtils");
 const sendMail = require("../utils/sendEmail");
 const { companyScopeWhere, resolveCompanyId } = require("../utils/companyScope");
+const { computeDiscount } = require("./couponController");
+const { Coupon } = require("../models");
+const RiskGatingService = require("../services/courier/RiskGatingService");
+const CourierBookingService = require("../services/courier/CourierBookingService");
 
 
 //--------------------------------------------------------------
@@ -21,7 +25,7 @@ const { companyScopeWhere, resolveCompanyId } = require("../utils/companyScope")
 // @desc     Create a new order
 // @access   Protected
 exports.createOrder = asyncHandler(async (req, res) => {
-  const { orderItems = [], discount = 0 } = req.body;
+  const { orderItems = [], coupon_code } = req.body;
 
   if (!orderItems.length) {
     return res.status(400).json({
@@ -71,33 +75,49 @@ exports.createOrder = asyncHandler(async (req, res) => {
     });
 
     /* ============================
-       3. Business Calculations
+       3. Validate coupon & compute discount server-side
+          (never trust a client-supplied discount amount)
     ============================ */
-    //@ add these in DB
+    let discount = 0;
+    let appliedCouponCode = null;
+    if (coupon_code) {
+      const coupon = await Coupon.findOne({
+        where: { company_id: req.user.company_id, code: String(coupon_code).trim().toUpperCase() },
+        transaction,
+      });
+      if (
+        coupon &&
+        coupon.isCurrentlyValid() &&
+        (coupon.min_order_amount == null || subtotal >= Number(coupon.min_order_amount))
+      ) {
+        discount = computeDiscount(coupon, subtotal);
+        appliedCouponCode = coupon.code;
+        await coupon.increment("used_count", { transaction });
+      }
+    }
+
+    /* ============================
+       4. Business Calculations
+    ============================ */
     const SHIPPING_COST = 100;
-    // const TAX_PERCENT = 5;
-    const DISCOUNT_PERCENT = 10;
     const FREE_SHIPPING_MIN = 1000;
 
-    // const discount = Math.round((subtotal * DISCOUNT_PERCENT) / 100);
     const taxableAmount = subtotal - discount;
-    // const tax = Math.round((taxableAmount * TAX_PERCENT) / 100);
-
     const shipping_cost =
       taxableAmount >= FREE_SHIPPING_MIN ? 0 : SHIPPING_COST;
 
     const total = taxableAmount + shipping_cost;
-    console.log(subtotal, taxableAmount, shipping_cost, total) //233 NaN 100 NaN
+
     /* ============================
-       4. Create Order
+       5. Create Order
     ============================ */
     const newOrder = await Order.create(
       {
         user_id: req.user.id,
         company_id: req.user.company_id,
         subtotal,
-        discount: +discount,
-        // tax, //add this column later
+        discount,
+        coupon_code: appliedCouponCode,
         shipping_cost,
         total,
         shipping_address: req.body.shippingAddress,
@@ -147,6 +167,11 @@ exports.createOrder = asyncHandler(async (req, res) => {
     ============================ */
     await transaction.commit();
 
+    // Fire-and-forget: risk-check + auto-book must never delay or break checkout.
+    runRiskGatingAndAutoBook(newOrder).catch((error) => {
+      console.error(`Order ${newOrder.id}: risk gating failed`, error.message);
+    });
+
     res.status(201).json({
       success: true,
       data: newOrder,
@@ -158,6 +183,16 @@ exports.createOrder = asyncHandler(async (req, res) => {
     throw error;
   }
 });
+
+async function runRiskGatingAndAutoBook(order) {
+  const company = await Company.findByPk(order.company_id);
+  if (!company) return;
+
+  const { should_auto_book } = await RiskGatingService.evaluate(order, company);
+  if (should_auto_book) {
+    await CourierBookingService.bookOrder(order, company);
+  }
+}
 
 // @route    GET /api/orders/myorders
 // @desc     Get logged-in user's orders
@@ -267,6 +302,7 @@ exports.generateInvoice = asyncHandler(async (req, res) => {
     include: [
       { model: User, as: 'user', attributes: ["name", "email"] },
       { model: OrderItem, as: 'items', include: [{ model: Product, as: 'product' }] },
+      { model: Company, as: 'company', attributes: ["company_name", "address", "contact", "currency"] },
     ],
   });
 
@@ -303,7 +339,7 @@ exports.generateInvoice = asyncHandler(async (req, res) => {
 // @desc     Get all orders
 // @access   Admin
 exports.getAllOrders = asyncHandler(async (req, res) => {
-  const { start_date, end_date, format } = req.query;
+  const { start_date, end_date, format, status, payment_method, q } = req.query;
 
   const startDate = start_date ? new Date(start_date) : new Date(new Date().setHours(0, 0, 0, 0));
   const endDate = end_date ? new Date(end_date) : new Date(new Date().setHours(23, 59, 59, 999));
@@ -316,6 +352,10 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
       [Op.between]: [new Date(startDate), new Date(endDate)],
     },
   });
+
+  if (status) where.status = status;
+  if (payment_method) where.payment_method = payment_method;
+  if (q && q.trim()) where.order_number = { [Op.like]: `%${q.trim()}%` };
 
   const { rows, count } = await Order.findAndCountAll({
     include: [
@@ -343,6 +383,8 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
       "status",
       "payment_status",
       "payment_method",
+      "risk_level",
+      "courier_status",
       "createdAt",
     ],
     // raw:true,
@@ -409,18 +451,49 @@ exports.getAllOrders = asyncHandler(async (req, res) => {
   }
 
   if (format === 'excel') {
-    return await handleExcelExport(res, rows, {
+    // Export must cover the whole filtered range, not just the current page.
+    const allRows = await Order.findAll({
+      include: [
+        { model: OrderItem, as: 'items', include: [{ model: Product, as: 'product' }] },
+        { model: User, as: 'user', attributes: ['name'] },
+      ],
+      attributes: ["id", "order_number", "shipping_cost", "discount", "total", "status", "payment_status", "payment_method", "createdAt"],
+      where,
+      order: [["createdAt", "DESC"]],
+    });
+
+    const paymentBreakdown = await Order.findAll({
+      attributes: ['payment_method',
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+        [sequelize.fn('SUM', sequelize.col('total')), 'total'],
+      ],
+      where,
+      raw: true,
+      group: ['payment_method'],
+    });
+
+    const topProducts = await OrderItem.findAll({
+      attributes: [
+        'product_id',
+        [sequelize.col('product.name'), 'name'],
+        [sequelize.fn('SUM', sequelize.col('order_quantity')), 'qty_sold'],
+      ],
+      include: [
+        { model: Product, as: 'product', attributes: [] },
+        { model: Order, as: 'items', where, attributes: [] },
+      ],
+      group: ['product_id', 'product.name'],
+      order: [[sequelize.fn('SUM', sequelize.col('order_quantity')), 'DESC']],
+      limit: 10,
+      raw: true,
+    });
+
+    return await handleExcelExport(res, allRows, {
       startDate,
       endDate,
       summaryStats: summary,
-      filters: {
-        // location_id,
-        // area_id,
-        // user_id,
-        // designation_id,
-        // rff_point_id,
-        // status,
-      },
+      paymentBreakdown,
+      topProducts,
     });
   }
   else {
@@ -640,6 +713,47 @@ exports.updateToDelivered = asyncHandler(async (req, res) => {
   });
 });
 
+// @route    POST /api/orders/:id/recheck-risk
+// @desc     Re-run the COD fraud-check, bypassing the cache (e.g. after a confirmation call)
+// @access   Admin
+exports.recheckRisk = asyncHandler(async (req, res, next) => {
+  const order = await Order.findByPk(req.params.id);
+  if (!order) return next(new ErrorResponse("Order Not Found", 404));
+
+  const company = await Company.findByPk(order.company_id);
+  if (!company) return next(new ErrorResponse("Company Not Found", 404));
+
+  const result = await RiskGatingService.evaluate(order, company, { skipCache: true });
+
+  res.status(200).json({
+    success: true,
+    data: { risk_level: order.risk_level, risk_score: order.risk_score, should_auto_book: result.should_auto_book },
+  });
+});
+
+// @route    POST /api/orders/:id/book-courier
+// @desc     Manually book the order with Steadfast, overriding the risk gate
+// @access   Admin
+exports.bookCourier = asyncHandler(async (req, res, next) => {
+  const order = await Order.findByPk(req.params.id);
+  if (!order) return next(new ErrorResponse("Order Not Found", 404));
+
+  if (order.courier_status === "booked" || order.courier_status === "in_transit") {
+    return next(new ErrorResponse(`Order is already ${order.courier_status} with the courier`, 400));
+  }
+
+  const company = await Company.findByPk(order.company_id);
+  if (!company) return next(new ErrorResponse("Company Not Found", 404));
+
+  const result = await CourierBookingService.bookOrder(order, company);
+
+  res.status(result.booked ? 200 : 422).json({
+    success: result.booked,
+    msg: result.booked ? "Order booked with Steadfast!" : result.reason,
+    data: { courier_status: order.courier_status, courier_tracking_code: order.courier_tracking_code },
+  });
+});
+
 // @route    GET /api/orders/overview
 // @desc     Get summary of all orders and others
 // @access   Admin
@@ -688,6 +802,111 @@ exports.getOrdersOverview = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     data: { ...overview, outOfStock: count },
+  });
+});
+
+// @route    GET /api/orders/dashboard-stats?days=14
+// @desc     Sales trend, order status breakdown, top products, payment method
+//           breakdown, and recent orders — powers the admin dashboard charts.
+// @access   Admin
+exports.getDashboardStats = asyncHandler(async (req, res) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 14, 1), 90);
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  start.setDate(start.getDate() - (days - 1));
+  start.setHours(0, 0, 0, 0);
+
+  const where = companyScopeWhere(req, {
+    createdAt: { [Op.between]: [start, end] },
+  });
+
+  // ── Daily revenue / order count trend (zero-filled for days with no orders)
+  const trendRows = await Order.findAll({
+    where,
+    attributes: [
+      [sequelize.fn('DATE', sequelize.col('createdAt')), 'date'],
+      [sequelize.fn('COUNT', sequelize.col('id')), 'orders'],
+      [sequelize.fn('SUM', sequelize.col('total')), 'revenue'],
+    ],
+    group: [sequelize.fn('DATE', sequelize.col('createdAt'))],
+    raw: true,
+  });
+  const trendMap = {};
+  trendRows.forEach((r) => {
+    const key = typeof r.date === 'string' ? r.date : new Date(r.date).toISOString().slice(0, 10);
+    trendMap[key] = { orders: Number(r.orders) || 0, revenue: Number(r.revenue) || 0 };
+  });
+  const trend = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    trend.push({ date: key, orders: trendMap[key]?.orders || 0, revenue: trendMap[key]?.revenue || 0 });
+  }
+
+  // ── Order status breakdown (all statuses, including zero counts)
+  const STATUSES = ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
+  const statusRows = await Order.findAll({
+    where,
+    attributes: ['status', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+    group: ['status'],
+    raw: true,
+  });
+  const statusMap = {};
+  statusRows.forEach((r) => { statusMap[r.status] = Number(r.count) || 0; });
+  const status_breakdown = STATUSES.map((s) => ({ status: s, count: statusMap[s] || 0 }));
+
+  // ── Top 5 products by units sold
+  const topProductRows = await OrderItem.findAll({
+    attributes: [
+      'product_id',
+      [sequelize.col('product.name'), 'name'],
+      [sequelize.fn('SUM', sequelize.col('order_quantity')), 'qty_sold'],
+    ],
+    include: [
+      { model: Product, as: 'product', attributes: [] },
+      { model: Order, as: 'items', where, attributes: [] },
+    ],
+    group: ['product_id', 'product.name'],
+    order: [[sequelize.fn('SUM', sequelize.col('order_quantity')), 'DESC']],
+    limit: 5,
+    raw: true,
+  });
+  const top_products = topProductRows.map((p) => ({
+    product_id: p.product_id,
+    name: p.name,
+    qty_sold: Number(p.qty_sold) || 0,
+  }));
+
+  // ── Payment method breakdown
+  const paymentRows = await Order.findAll({
+    where,
+    attributes: ['payment_method',
+      [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+      [sequelize.fn('SUM', sequelize.col('total')), 'total'],
+    ],
+    group: ['payment_method'],
+    raw: true,
+  });
+  const payment_breakdown = paymentRows.map((p) => ({
+    payment_method: p.payment_method || 'unknown',
+    count: Number(p.count) || 0,
+    total: Number(p.total) || 0,
+  }));
+
+  // ── 5 most recent orders (regardless of the trend date range)
+  const recent_orders = await Order.findAll({
+    where: companyScopeWhere(req),
+    include: [{ model: User, as: 'user', attributes: ['name'] }],
+    attributes: ['id', 'order_number', 'total', 'status', 'payment_status', 'createdAt'],
+    order: [['createdAt', 'DESC']],
+    limit: 5,
+  });
+
+  res.status(200).json({
+    success: true,
+    data: { trend, status_breakdown, top_products, payment_breakdown, recent_orders },
   });
 });
 
@@ -922,6 +1141,7 @@ exports.generateInvoiceForPOS = asyncHandler(async (req, res) => {
     include: [
       { model: User, as: 'user', attributes: ["name", "email"] },
       { model: OrderItem, as: 'items', include: [{ model: Product, as: 'product' }] },
+      { model: Company, as: 'company', attributes: ["company_name", "address", "contact", "currency"] },
     ],
   });
 

@@ -38,6 +38,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DECIMAL(10, 2),
       defaultValue: 0.0,
     },
+    coupon_code: {
+      type: DataTypes.STRING(40),
+      allowNull: true,
+    },
     shipping_cost: {
       type: DataTypes.DECIMAL(10, 2),
       defaultValue: 0.0,
@@ -81,6 +85,46 @@ module.exports = (sequelize, DataTypes) => {
     },
     tracking_number: {
       type: DataTypes.STRING(100),
+    },
+
+    // Courier booking (Steadfast)
+    courier_provider: {
+      type: DataTypes.STRING(30),
+      allowNull: true,
+    },
+    courier_consignment_id: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    courier_tracking_code: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    courier_status: {
+      type: DataTypes.ENUM(
+        'not_booked',
+        'pending_review',
+        'booked',
+        'in_transit',
+        'delivered',
+        'returned',
+        'cancelled'
+      ),
+      defaultValue: 'not_booked',
+    },
+
+    // COD fraud-check risk gating
+    risk_level: {
+      type: DataTypes.ENUM('unverified', 'low', 'medium', 'high'),
+      allowNull: true,
+    },
+    risk_score: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    risk_checked_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
     // createdAt: {
     //   allowNull: true,

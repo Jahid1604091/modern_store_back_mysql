@@ -1,6 +1,10 @@
 const asyncHandler = require("../middleware/asyncHandler.js");
 const { Category, Product, sequelize } = require("../models");
 const slugify = require("slugify");
+const fs = require("fs");
+const path = require("path");
+const Sequelize = require("sequelize");
+const Op = Sequelize.Op;
 const ErrorResponse = require("../utils/errorresponse.js");
 const { companyScopeWhere, resolveCompanyId } = require("../utils/companyScope.js");
 
@@ -28,15 +32,16 @@ exports.createCategory = asyncHandler(async (req, res, next) => {
     isActive: status,
     parentId: parentId || null,
     company_id,
+    image: req.file ? `images/categories/${req.file.filename}` : null,
   });
 
   res.status(200).json({ success: true, msg: "Category created successfully!", data: category });
 });
 
-// @route    GET /api/categories?company_id=X
+// @route    GET /api/categories?company_id=X&q=term&status=active
 // @desc     Fetch all categories
 //           - Public: requires company_id query param, returns only active
-//           - Admin: scoped from JWT company_id, returns all
+//           - Admin: scoped from JWT company_id, returns all (filterable by q/status)
 // @access   Public / Admin
 exports.getCategories = asyncHandler(async (req, res, next) => {
   let company_id;
@@ -50,16 +55,25 @@ exports.getCategories = asyncHandler(async (req, res, next) => {
     }
   }
 
+  const { q, status } = req.query;
   const whereCondition = { softDeletedAt: null, company_id };
 
   // Public callers only see active categories
   if (!req.user) {
     whereCondition.isActive = true;
+  } else if (status === "active") {
+    whereCondition.isActive = true;
+  } else if (status === "inactive") {
+    whereCondition.isActive = false;
+  }
+
+  if (q && q.trim()) {
+    whereCondition.name = { [Op.like]: `%${q.trim()}%` };
   }
 
   const categories = await Category.findAll({
     attributes: [
-      'id', 'name', 'slug', 'isActive', 'parentId',
+      'id', 'name', 'slug', 'isActive', 'parentId', 'image',
       [sequelize.fn('COUNT', sequelize.col('products.id')), 'productCount'],
     ],
     include: [{ model: Product, as: 'products', attributes: [], required: false }],
@@ -68,10 +82,6 @@ exports.getCategories = asyncHandler(async (req, res, next) => {
     order: [['id', 'ASC']],
     raw: true,
   });
-
-  if (!categories.length) {
-    return next(new ErrorResponse("No category found!", 404));
-  }
 
   res.status(200).json({
     success: true,
@@ -93,12 +103,27 @@ exports.editCategory = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse("Category not found!", 404));
   }
 
-  await category.update({
+  if (parentId && Number(parentId) === category.id) {
+    return next(new ErrorResponse("A category cannot be its own parent.", 400));
+  }
+
+  const updates = {
     name: name ?? category.name,
     slug: name ? slugify(name, { lower: true }) : category.slug,
     isActive: typeof status !== "undefined" ? status : category.isActive,
-    parentId: typeof parentId !== "undefined" ? parentId : category.parentId,
-  });
+    parentId: typeof parentId !== "undefined" ? (parentId || null) : category.parentId,
+  };
+
+  if (req.file) {
+    if (category.image) {
+      fs.unlink(path.join(process.cwd(), category.image), (err) => {
+        if (err) console.error("Error deleting old category image:", err.message);
+      });
+    }
+    updates.image = `images/categories/${req.file.filename}`;
+  }
+
+  await category.update(updates);
 
   res.status(200).json({ success: true, msg: "Category updated successfully!", data: category });
 });
@@ -128,6 +153,7 @@ function formatCategories(categories, parentId = null) {
       name: cat.name,
       slug: cat.slug,
       isActive: cat.isActive,
+      image: cat.image,
       productCount: Number(cat.productCount) || 0,
       subcategories: formatCategories(categories, cat.id),
     }));

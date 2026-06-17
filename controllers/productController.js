@@ -204,7 +204,10 @@ const addReviewToProduct = asyncHandler(async function (req, res, next) {
 // @desc     Create product (scoped to the admin's company)
 // @access   Protected (Admin)
 const createProduct = asyncHandler(async function (req, res, next) {
-  if (!req.files || !req.files.length) {
+  const imageFiles = req.files?.images || [];
+  const tryonFile = req.files?.tryon_image?.[0];
+
+  if (!imageFiles.length) {
     return res.status(400).json({ success: false, msg: 'At least one image is required!' });
   }
 
@@ -229,7 +232,7 @@ const createProduct = asyncHandler(async function (req, res, next) {
     }
   }
 
-  const gallery = req.files.map((f) => `images/products/${f.filename}`);
+  const gallery = imageFiles.map((f) => `images/products/${f.filename}`);
 
   const product = await Product.create({
     ...req.body,
@@ -237,6 +240,7 @@ const createProduct = asyncHandler(async function (req, res, next) {
     slug,
     image: gallery[0],
     gallery,
+    tryon_image: tryonFile ? `images/products/${tryonFile.filename}` : null,
     tags: tags ? JSON.parse(tags) : [],
     metadata: metadata ? JSON.parse(metadata) : {},
     status: status ? 'active' : 'inactive',
@@ -269,16 +273,35 @@ const editProduct = asyncHandler(async function (req, res, next) {
     });
   }
 
-  if (req.files && req.files.length) {
-    if (gallery.length + req.files.length > 5) {
+  const imageFiles = req.files?.images || [];
+  const tryonFile = req.files?.tryon_image?.[0];
+
+  if (imageFiles.length) {
+    if (gallery.length + imageFiles.length > 5) {
       return res.status(400).json({ success: false, msg: 'A product can have at most 5 images.' });
     }
-    gallery = [...gallery, ...req.files.map((f) => `images/products/${f.filename}`)];
+    gallery = [...gallery, ...imageFiles.map((f) => `images/products/${f.filename}`)];
   }
 
-  if (body.remove_images || (req.files && req.files.length)) {
+  if (body.remove_images || imageFiles.length) {
     body.gallery = gallery;
     body.image = gallery[0] || null;
+  }
+
+  if (tryonFile) {
+    if (product.tryon_image) {
+      fs.unlink(path.join(process.cwd(), product.tryon_image), (err) => {
+        if (err) console.error('Error deleting old try-on image:', err.message);
+      });
+    }
+    body.tryon_image = `images/products/${tryonFile.filename}`;
+  } else if (body.remove_tryon_image) {
+    if (product.tryon_image) {
+      fs.unlink(path.join(process.cwd(), product.tryon_image), (err) => {
+        if (err) console.error('Error deleting old try-on image:', err.message);
+      });
+    }
+    body.tryon_image = null;
   }
 
   if (body.name) body.slug = slugify(body.name, '-');

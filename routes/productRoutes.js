@@ -38,8 +38,14 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024, files: 5 },
+  limits: { fileSize: 5 * 1024 * 1024, files: 6 },
   fileFilter: (req, file, cb) => {
+    if (file.fieldname === 'tryon_image') {
+      if (file.mimetype !== 'image/png') {
+        return cb(new Error('Try-on image must be a transparent PNG.'));
+      }
+      return cb(null, true);
+    }
     if (!/^image\//.test(file.mimetype)) {
       return cb(new Error('Only image files are allowed.'));
     }
@@ -47,16 +53,21 @@ const upload = multer({
   },
 });
 
+const uploadProductImages = upload.fields([
+  { name: 'images', maxCount: 5 },
+  { name: 'tryon_image', maxCount: 1 },
+]);
+
 // Routes
 router
   .route('/')
   .get(optionalAuth, getAllProducts)
-  .post(protect, resolveTenant, checkProductQuota, upload.array('images', 5), createValidationRules(), validator, createProduct);
+  .post(protect, resolveTenant, checkProductQuota, uploadProductImages, createValidationRules(), validator, createProduct);
 
 router
   .route('/:id')
   .get(getProduct)
-  .patch(protect, upload.array('images', 5), editProduct)
+  .patch(protect, uploadProductImages, editProduct)
   .delete(protect, deleteProduct);
 
 router.route('/:id/stock').patch(protect, authorize('admin', 'super-admin'), adjustStock);

@@ -12,6 +12,9 @@ const categoryRoutes = require('./routes/categoryRoutes.js');
 const companyRoutes = require('./routes/companyRoutes.js');
 const authRoutes = require('./routes/authRoutes.js');
 const subscriptionRequestRoutes = require('./routes/subscriptionRequestRoutes.js');
+const bannerRoutes = require('./routes/bannerRoutes.js');
+const couponRoutes = require('./routes/couponRoutes.js');
+const webhookRoutes = require('./routes/webhookRoutes.js');
 const path = require('path');
 
 
@@ -73,6 +76,9 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/subscription-requests', subscriptionRequestRoutes);
+app.use('/api/banners', bannerRoutes);
+app.use('/api/coupons', couponRoutes);
+app.use('/api/webhooks', webhookRoutes);
 // app.use('/api/brands', brandRoutes);
 
 //use for integrated application

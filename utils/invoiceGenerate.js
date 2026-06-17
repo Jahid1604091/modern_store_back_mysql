@@ -12,6 +12,12 @@ const invoiceGenerate = (order, filePath, dataCallback, endCallback) => {
   doc.on("end", endCallback);
   doc.pipe(fs.createWriteStream(filePath));
 
+  const company = order.company || {};
+  const contact = company.contact || {};
+  const supportEmail = contact.support_email || contact.contact_email || "";
+  const supportMobile = contact.support_mobile || contact.contact_mobile || "";
+  const currency = order.currency || company.currency || "BDT";
+
   /* =========================
      HEADER
   ========================== */
@@ -24,10 +30,10 @@ const invoiceGenerate = (order, filePath, dataCallback, endCallback) => {
     .moveDown(0.5)
     .fontSize(12)
     .font("Helvetica")
-    .text("Your Company Name", 50, 50)
-    .text("Mymensingh, Bangladesh")
-    .text("Email: support@yourcompany.com")
-    .text("Phone: +8801XXXXXXXX");
+    .text(company.company_name || "", 50, 50);
+  if (company.address) doc.text(company.address);
+  if (supportEmail) doc.text(`Email: ${supportEmail}`);
+  if (supportMobile) doc.text(`Phone: ${supportMobile}`);
 
   doc.moveDown(2);
 
@@ -99,8 +105,8 @@ const invoiceGenerate = (order, filePath, dataCallback, endCallback) => {
 
     doc.text(itemLabel, itemX, positionY, { width: 220 });
     doc.text(item.order_quantity, qtyX, positionY);
-    doc.text(`BDT ${item.unit_price}`, priceX, positionY);
-    doc.text(`BDT ${total}`, totalX, positionY);
+    doc.text(`${currency} ${item.unit_price}`, priceX, positionY);
+    doc.text(`${currency} ${total}`, totalX, positionY);
 
     positionY += 20;
   });
@@ -112,20 +118,20 @@ const invoiceGenerate = (order, filePath, dataCallback, endCallback) => {
   ========================== */
   doc
     .font("Helvetica")
-    .text(`Sub Total: BDT ${order.subtotal}`, totalX - 80, positionY + 10, {
+    .text(`Sub Total: ${currency} ${order.subtotal}`, totalX - 80, positionY + 10, {
       align: "right",
     })
-    .text(`Shipping: BDT ${order.shipping_cost}`, totalX - 80, positionY + 30, {
+    .text(`Shipping: ${currency} ${order.shipping_cost}`, totalX - 80, positionY + 30, {
       align: "right",
     })
-    .text(`Discount: BDT ${order.discount}`, totalX - 80, positionY + 50, {
+    .text(`Discount: ${currency} ${order.discount}`, totalX - 80, positionY + 50, {
       align: "right",
     });
 
   doc
     .font("Helvetica-Bold")
     .fontSize(14)
-    .text(`Grand Total: BDT ${order.total}`, totalX - 80, positionY + 80, {
+    .text(`Grand Total: ${currency} ${order.total}`, totalX - 80, positionY + 80, {
       align: "right",
     });
 

@@ -1,5 +1,6 @@
 "use strict";
 const { Model } = require("sequelize");
+const { encrypt, decrypt } = require("../utils/crypto");
 
 module.exports = (sequelize, DataTypes) => {
   class Company extends Model {
@@ -19,12 +20,24 @@ module.exports = (sequelize, DataTypes) => {
       );
     }
 
+    getCourierSettings() {
+      return {
+        auto_book_enabled: true,
+        auto_book_min_orders: 3,
+        auto_book_min_success_rate: 0.8,
+        high_risk_max_success_rate: 0.5,
+        ...(this.courier_settings || {}),
+      };
+    }
+
     static associate(models) {
       Company.hasMany(models.User, { foreignKey: "company_id", as: "users" });
       Company.hasMany(models.Product, { foreignKey: "company_id", as: "products" });
       Company.hasMany(models.Category, { foreignKey: "company_id", as: "categories" });
       Company.hasMany(models.Order, { foreignKey: "company_id", as: "orders" });
       Company.hasMany(models.SubscriptionRequest, { foreignKey: "company_id", as: "subscription_requests" });
+      Company.hasMany(models.Banner, { foreignKey: "company_id", as: "banners" });
+      Company.hasMany(models.Coupon, { foreignKey: "company_id", as: "coupons" });
     }
   }
 
@@ -84,6 +97,31 @@ module.exports = (sequelize, DataTypes) => {
       max_products: {
         type: DataTypes.INTEGER,
         defaultValue: 100,
+      },
+      // Courier integration (Steadfast)
+      steadfast_api_key: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        get() {
+          return decrypt(this.getDataValue("steadfast_api_key"));
+        },
+        set(value) {
+          this.setDataValue("steadfast_api_key", encrypt(value));
+        },
+      },
+      steadfast_secret_key: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        get() {
+          return decrypt(this.getDataValue("steadfast_secret_key"));
+        },
+        set(value) {
+          this.setDataValue("steadfast_secret_key", encrypt(value));
+        },
+      },
+      courier_settings: {
+        type: DataTypes.JSON,
+        allowNull: true,
       },
     },
     {
