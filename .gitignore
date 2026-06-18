@@ -2,3 +2,5 @@
 node_modules
 invoices
 config/config.json
+images/*
+logs/out.log
