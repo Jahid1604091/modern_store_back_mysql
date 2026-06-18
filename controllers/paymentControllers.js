@@ -60,8 +60,8 @@ const manualPayment = asyncHandler(async function (req, res, next) {
         return next(new ErrorResponse('Order already fully paid', 400));
     }
 
-    // First payment minimum check
-    if (totalPaid === 0 && advance_paid < ADVANCED_PAY_MIN_THRESHOLD) {
+    // First payment minimum check - doesn't apply to COD, which has no advance
+    if (payment_medium !== 'cod' && totalPaid === 0 && advance_paid < ADVANCED_PAY_MIN_THRESHOLD) {
         return next(
             new ErrorResponse(
                 `Advance can't be less than ${ADVANCED_PAY_MIN_THRESHOLD} BDT`,
