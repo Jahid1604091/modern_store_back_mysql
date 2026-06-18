@@ -21,12 +21,16 @@ const manualPayment = asyncHandler(async function (req, res, next) {
 
     const {
         payment_medium,
-        advance_paid = 0,
+        advance_paid: rawAdvancePaid = 0,
         trx_id,
         order_id,
         acc_no,
         bank_details = {},
     } = req.body;
+
+    // COD has no online advance - never trust a client-sent amount for it,
+    // regardless of stale form state on the frontend.
+    const advance_paid = payment_medium === 'cod' ? 0 : rawAdvancePaid;
 
     const { bank_name, branch, routing_no } = bank_details;
 
