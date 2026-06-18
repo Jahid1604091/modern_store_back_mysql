@@ -151,8 +151,10 @@ const getAllProducts = asyncHandler(async (req, res) => {
 });
 
 // @route    GET /api/products/:id
-// @desc     Get single product
-// @access   Public
+// @desc     Get single product.
+//           Public: only returns the product if it's active.
+//           Authenticated admin: can view any status (e.g. previewing a draft).
+// @access   Public / Protected (optionalAuth)
 const getProduct = asyncHandler(async function (req, res, next) {
   const product = await Product.findByPk(req.params.id, {
     include: [
@@ -160,7 +162,8 @@ const getProduct = asyncHandler(async function (req, res, next) {
       { model: Review, as: 'reviews' },
     ],
   });
-  if (!product) {
+  const isAdmin = !!req.user;
+  if (!product || (!isAdmin && product.status !== 'active')) {
     return next(new ErrorResponse('Product not found', 404));
   }
   res.status(200).json({ success: true, data: product });

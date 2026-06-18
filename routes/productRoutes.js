@@ -66,7 +66,7 @@ router
 
 router
   .route('/:id')
-  .get(getProduct)
+  .get(optionalAuth, getProduct)
   .patch(protect, uploadProductImages, editProduct)
   .delete(protect, deleteProduct);
 
