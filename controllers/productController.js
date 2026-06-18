@@ -310,6 +310,9 @@ const editProduct = asyncHandler(async function (req, res, next) {
   if (body.name) body.slug = slugify(body.name, '-');
   if (typeof body.metadata === 'string') body.metadata = JSON.parse(body.metadata);
   if (typeof body.tags === 'string') body.tags = JSON.parse(body.tags);
+  if (body.status !== undefined && body.status !== 'active' && body.status !== 'inactive' && body.status !== 'draft') {
+    body.status = (body.status === '1' || body.status === 1 || body.status === true) ? 'active' : 'inactive';
+  }
 
   await product.update(body);
 
