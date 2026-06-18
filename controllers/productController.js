@@ -30,8 +30,9 @@ const getAllProducts = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, msg: 'company_id query parameter is required.' });
   }
 
-  // Authenticated admins see all statuses; public sees only active
-  const isAdmin = !!req.user;
+  // Authenticated staff (assigned a role) see all statuses; storefront
+  // customers (no role) and anonymous visitors see only active products.
+  const isAdmin = !!(req.user && req.user.roles && req.user.roles.length > 0);
   const productWhere = { company_id };
   if (!isAdmin) {
     productWhere.status = "active";
@@ -162,7 +163,7 @@ const getProduct = asyncHandler(async function (req, res, next) {
       { model: Review, as: 'reviews' },
     ],
   });
-  const isAdmin = !!req.user;
+  const isAdmin = !!(req.user && req.user.roles && req.user.roles.length > 0);
   if (!product || (!isAdmin && product.status !== 'active')) {
     return next(new ErrorResponse('Product not found', 404));
   }
