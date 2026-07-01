@@ -17,6 +17,7 @@ const {
   generateInvoiceForPOS,
   recheckRisk,
   bookCourier,
+  getZReport,
 } = require("../controllers/orderController");
 
 const { protect, authorize } = require("../middleware/authMiddleware");
@@ -33,6 +34,7 @@ router.get("/myorders/:id/invoice",protect,  generateInvoice);
 router.get("/overview", protect, authorize("admin"), getOrdersOverview);
 router.get("/dashboard-stats", protect, authorize("admin"), getDashboardStats);
 router.get("/sales-report", protect, authorize("admin"), getSalesReport);
+router.get("/z-report", protect, authorize("admin"), getZReport);
 router.get("/", protect, authorize("admin"), getAllOrders);
 router.get("/:id", protect, authorize("admin"), getOrder);
 router.put("/:id/change-to-delivered", protect, authorize("admin"), updateToDelivered);

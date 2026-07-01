@@ -1194,3 +1194,81 @@ async function handleExcelExport(res, data, options) {
     throw new ErrorResponse(`Excel export failed: ${error.message}`);
   }
 }
+// @route    GET /api/orders/z-report?date=YYYY-MM-DD
+// @desc     Day-end Z-report for POS: totals, payment breakdown, top products
+// @access   Protected (Admin)
+exports.getZReport = asyncHandler(async (req, res) => {
+  const dateStr = req.query.date || dayjs().format('YYYY-MM-DD');
+  const start = new Date(`${dateStr}T00:00:00.000Z`);
+  // Use local midnight for start and end
+  const startLocal = dayjs(dateStr).startOf('day').toDate();
+  const endLocal   = dayjs(dateStr).endOf('day').toDate();
+
+  const company_id = resolveCompanyId(req);
+  const where = {
+    company_id,
+    createdAt: { [Op.between]: [startLocal, endLocal] },
+  };
+
+  const [
+    totalOrders,
+    totalSales,
+    totalDiscount,
+    paymentBreakdown,
+    topProducts,
+    statusBreakdown,
+  ] = await Promise.all([
+    Order.count({ where }),
+    Order.sum('total',    { where }),
+    Order.sum('discount', { where }),
+    Order.findAll({
+      attributes: [
+        'payment_method',
+        [sequelize.fn('COUNT', sequelize.col('Order.id')), 'order_count'],
+        [sequelize.fn('SUM',   sequelize.col('total')),   'total_amount'],
+      ],
+      where,
+      group: ['payment_method'],
+      raw: true,
+    }),
+    OrderItem.findAll({
+      attributes: [
+        'product_id',
+        [sequelize.col('product.name'), 'product_name'],
+        [sequelize.fn('SUM', sequelize.col('order_quantity')), 'total_qty'],
+        [sequelize.literal('SUM(order_quantity * unit_price)'), 'total_revenue'],
+      ],
+      include: [
+        { model: Product, as: 'product', attributes: [] },
+        { model: Order,   as: 'items',   where, attributes: [] },
+      ],
+      group: ['product_id', 'product.name'],
+      order: [[sequelize.literal('total_qty'), 'DESC']],
+      limit: 10,
+      raw: true,
+    }),
+    Order.findAll({
+      attributes: [
+        'status',
+        [sequelize.fn('COUNT', sequelize.col('Order.id')), 'count'],
+      ],
+      where,
+      group: ['status'],
+      raw: true,
+    }),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      date: dateStr,
+      total_orders: totalOrders || 0,
+      gross_sales:  Number(totalSales   || 0).toFixed(2),
+      total_discount: Number(totalDiscount || 0).toFixed(2),
+      net_sales: Number((totalSales || 0) - (totalDiscount || 0)).toFixed(2),
+      payment_breakdown: paymentBreakdown,
+      top_products: topProducts,
+      status_breakdown: statusBreakdown,
+    },
+  });
+});

@@ -15,6 +15,7 @@ const subscriptionRequestRoutes = require('./routes/subscriptionRequestRoutes.js
 const bannerRoutes = require('./routes/bannerRoutes.js');
 const couponRoutes = require('./routes/couponRoutes.js');
 const webhookRoutes = require('./routes/webhookRoutes.js');
+const purchaseOrderRoutes = require('./routes/purchaseOrderRoutes.js');
 const path = require('path');
 
 
@@ -79,6 +80,7 @@ app.use('/api/subscription-requests', subscriptionRequestRoutes);
 app.use('/api/banners', bannerRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/purchase-orders', purchaseOrderRoutes);
 // app.use('/api/brands', brandRoutes);
 
 //use for integrated application

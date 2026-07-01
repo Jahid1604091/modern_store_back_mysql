@@ -12,6 +12,8 @@ const {
   getProductByBarCode,
   adjustStock,
   getStockHistory,
+  importProducts,
+  downloadImportTemplate,
 } = require('../controllers/productController.js');
 
 const { protect, authorize, optionalAuth } = require('../middleware/authMiddleware.js');
@@ -58,11 +60,36 @@ const uploadProductImages = upload.fields([
   { name: 'tryon_image', maxCount: 1 },
 ]);
 
-// Routes
+// Multer for CSV/Excel import (no image processing, single file)
+const importDir = path.join(__dirname, '../tmp');
+if (!fs.existsSync(importDir)) fs.mkdirSync(importDir, { recursive: true });
+const importStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, importDir),
+  filename: (req, file, cb) => cb(null, `import-${Date.now()}${path.extname(file.originalname)}`),
+});
+const uploadImport = multer({
+  storage: importStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.csv', '.xlsx', '.xls'];
+    if (!allowed.includes(path.extname(file.originalname).toLowerCase())) {
+      return cb(new Error('Only CSV and Excel files are allowed.'));
+    }
+    cb(null, true);
+  },
+}).single('file');
+
+// Routes — static paths must come before /:id
 router
   .route('/')
   .get(optionalAuth, getAllProducts)
   .post(protect, resolveTenant, checkProductQuota, uploadProductImages, createValidationRules(), validator, createProduct);
+
+// Bulk import — static, must precede /:id
+router.get('/import/template', protect, authorize('admin', 'super-admin'), downloadImportTemplate);
+router.post('/import', protect, authorize('admin', 'super-admin'), uploadImport, importProducts);
+
+router.route('/pos/:barcode').get(protect, authorize("admin"), getProductByBarCode);
 
 router
   .route('/:id')
@@ -72,9 +99,6 @@ router
 
 router.route('/:id/stock').patch(protect, authorize('admin', 'super-admin'), adjustStock);
 router.route('/:id/stock-history').get(protect, getStockHistory);
-
-router.route('/pos/:barcode').get(protect, authorize("admin"), getProductByBarCode)
-
 
 // router.put('/:id/view', incremeentProductView);
 router.patch('/:id/review', protect, addReviewToProduct);

@@ -3,6 +3,7 @@ const asyncHandler = require('../middleware/asyncHandler.js');
 const ErrorResponse = require('../utils/errorresponse.js');
 const fs = require('fs');
 const path = require('path');
+const ExcelJS = require('exceljs');
 const Sequelize = require('sequelize');
 const Op = Sequelize.Op;
 const db = require("../models/index");
@@ -159,7 +160,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
 const getProduct = asyncHandler(async function (req, res, next) {
   const product = await Product.findByPk(req.params.id, {
     include: [
-      { model: Category, as: 'category', attributes: ['id', 'name'], where: { isActive: true } },
+      { model: Category, as: 'category', attributes: ['id', 'name'], required: false },
       { model: Review, as: 'reviews' },
     ],
   });
@@ -438,6 +439,111 @@ const getStockHistory = asyncHandler(async function (req, res, next) {
   res.status(200).json({ success: true, data: history });
 });
 
+// @route    POST /api/products/import
+// @desc     Bulk import products from CSV or Excel file
+// @access   Protected (Admin)
+const importProducts = asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, msg: 'No file uploaded.' });
+
+  const company_id = resolveCompanyId(req);
+  if (!company_id) return res.status(400).json({ success: false, msg: 'company_id required.' });
+
+  const filePath = req.file.path;
+  const ext = path.extname(req.file.originalname).toLowerCase();
+
+  let rows = [];
+
+  try {
+    const workbook = new ExcelJS.Workbook();
+    if (ext === '.csv') {
+      await workbook.csv.readFile(filePath);
+    } else {
+      await workbook.xlsx.readFile(filePath);
+    }
+    const worksheet = workbook.worksheets[0];
+
+    // First row = headers
+    const headers = [];
+    worksheet.getRow(1).eachCell({ includeEmpty: true }, (cell) => {
+      headers.push(String(cell.value || '').trim().toLowerCase().replace(/\s+/g, '_'));
+    });
+
+    worksheet.eachRow({ includeEmpty: false }, (row, rowNum) => {
+      if (rowNum === 1) return; // skip header
+      const obj = {};
+      row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+        const header = headers[colNum - 1];
+        if (header) obj[header] = cell.value !== null && cell.value !== undefined ? String(cell.value).trim() : '';
+      });
+      if (obj.name && obj.price) rows.push(obj);
+    });
+  } finally {
+    fs.unlink(filePath, () => {});
+  }
+
+  if (!rows.length) {
+    return res.status(400).json({ success: false, msg: 'No valid rows found. Ensure columns: name, price.' });
+  }
+
+  // Resolve category names to IDs for this company
+  const categoryNames = [...new Set(rows.map((r) => r.category).filter(Boolean))];
+  const categories = categoryNames.length
+    ? await Category.findAll({ where: { name: { [Op.in]: categoryNames }, company_id } })
+    : [];
+  const catMap = Object.fromEntries(categories.map((c) => [c.name.toLowerCase(), c.id]));
+
+  const created = [];
+  const errors = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    try {
+      const slug = slugify(`${r.name}-${Date.now()}-${i}`, { lower: true, strict: true });
+      await Product.create({
+        company_id,
+        name: r.name,
+        slug,
+        price: parseFloat(r.price) || 0,
+        stock_quantity: parseInt(r.stock_quantity) || 0,
+        min_stock_threshold: parseInt(r.min_stock_threshold) || 1,
+        sku: r.sku || null,
+        barcode: r.barcode || null,
+        unit: r.unit || null,
+        description: r.description || null,
+        status: ['active', 'inactive', 'draft'].includes(r.status) ? r.status : 'active',
+        tax_rate: parseFloat(r.tax_rate) || 0,
+        category_id: r.category ? (catMap[r.category.toLowerCase()] || null) : null,
+        image: null,
+        gallery: [],
+      });
+      created.push(r.name);
+    } catch (err) {
+      errors.push({ row: i + 2, name: r.name, error: err.message });
+    }
+  }
+
+  res.status(200).json({
+    success: true,
+    msg: `Import complete. ${created.length} created, ${errors.length} failed.`,
+    data: { created: created.length, failed: errors.length, errors },
+  });
+});
+
+// @route    GET /api/products/import/template
+// @desc     Download a CSV template for bulk import
+// @access   Protected (Admin)
+const downloadImportTemplate = asyncHandler(async (req, res) => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Products');
+  sheet.addRow(['name', 'price', 'stock_quantity', 'min_stock_threshold', 'sku', 'barcode', 'unit', 'category', 'description', 'status', 'tax_rate']);
+  sheet.addRow(['Apple', '10.00', '100', '5', 'APL-001', '1234567890', 'kg', 'Fruits', 'Fresh apples', 'active', '0']);
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename=product_import_template.xlsx');
+  await workbook.xlsx.write(res);
+  res.end();
+});
+
 module.exports = {
   getAllProducts,
   createProduct,
@@ -448,4 +554,6 @@ module.exports = {
   getProductByBarCode,
   adjustStock,
   getStockHistory,
+  importProducts,
+  downloadImportTemplate,
 };
