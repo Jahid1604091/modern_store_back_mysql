@@ -485,41 +485,75 @@ const importProducts = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, msg: 'No valid rows found. Ensure columns: name, price.' });
   }
 
-  // Resolve category names to IDs for this company
-  const categoryNames = [...new Set(rows.map((r) => r.category).filter(Boolean))];
-  const categories = categoryNames.length
-    ? await Category.findAll({ where: { name: { [Op.in]: categoryNames }, company_id } })
-    : [];
-  const catMap = Object.fromEntries(categories.map((c) => [c.name.toLowerCase(), c.id]));
+  // Auto-create any categories that don't exist yet for this company.
+  // Exclude soft-deleted rows from the lookup so they don't shadow new ones.
+  const categoryNames = [...new Set(rows.map((r) => r.category?.trim()).filter(Boolean))];
+  const catMap = {};
+  if (categoryNames.length) {
+    await Promise.all(
+      categoryNames.map(async (name) => {
+        // Look for an existing active (non-deleted) category first
+        let cat = await Category.findOne({
+          where: { name, company_id, softDeletedAt: null },
+        });
 
+        if (!cat) {
+          // Restore a soft-deleted one with the same name, or create fresh
+          const deleted = await Category.findOne({ where: { name, company_id } });
+          if (deleted) {
+            await deleted.update({ softDeletedAt: null, isActive: true });
+            cat = deleted;
+          } else {
+            cat = await Category.create({
+              name,
+              company_id,
+              isActive: true,
+              slug: slugify(name, { lower: true, strict: true }),
+            });
+          }
+        }
+
+        catMap[name.toLowerCase()] = cat.id;
+      })
+    );
+  }
+
+  // Process rows in parallel batches of 50 to avoid blocking the event loop
+  const BATCH_SIZE = 50;
   const created = [];
   const errors = [];
 
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    try {
-      const slug = slugify(`${r.name}-${Date.now()}-${i}`, { lower: true, strict: true });
-      await Product.create({
-        company_id,
-        name: r.name,
-        slug,
-        price: parseFloat(r.price) || 0,
-        stock_quantity: parseInt(r.stock_quantity) || 0,
-        min_stock_threshold: parseInt(r.min_stock_threshold) || 1,
-        sku: r.sku || null,
-        barcode: r.barcode || null,
-        unit: r.unit || null,
-        description: r.description || null,
-        status: ['active', 'inactive', 'draft'].includes(r.status) ? r.status : 'active',
-        tax_rate: parseFloat(r.tax_rate) || 0,
-        category_id: r.category ? (catMap[r.category.toLowerCase()] || null) : null,
-        image: null,
-        gallery: [],
-      });
-      created.push(r.name);
-    } catch (err) {
-      errors.push({ row: i + 2, name: r.name, error: err.message });
-    }
+  for (let batchStart = 0; batchStart < rows.length; batchStart += BATCH_SIZE) {
+    const batch = rows.slice(batchStart, batchStart + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map((r, i) => {
+        const slug = slugify(`${r.name}-${Date.now()}-${batchStart + i}`, { lower: true, strict: true });
+        return Product.create({
+          company_id,
+          name: r.name,
+          slug,
+          price: parseFloat(r.price) || 0,
+          stock_quantity: parseInt(r.stock_quantity) || 0,
+          min_stock_threshold: parseInt(r.min_stock_threshold) || 1,
+          sku: r.sku || null,
+          barcode: r.barcode || null,
+          unit: r.unit || null,
+          description: r.description || null,
+          status: ['active', 'inactive', 'draft'].includes(r.status) ? r.status : 'active',
+          tax_rate: parseFloat(r.tax_rate) || 0,
+          category_id: r.category ? (catMap[r.category.trim().toLowerCase()] || null) : null,
+          image: null,
+          gallery: [],
+        });
+      })
+    );
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        created.push(batch[i].name);
+      } else {
+        errors.push({ row: batchStart + i + 2, name: batch[i].name, error: result.reason.message });
+      }
+    });
   }
 
   res.status(200).json({
@@ -544,6 +578,40 @@ const downloadImportTemplate = asyncHandler(async (req, res) => {
   res.end();
 });
 
+// @route  DELETE /api/products/bulk
+// @desc   Delete multiple products by IDs (scoped to company)
+// @access Protected (Admin)
+const bulkDeleteProducts = asyncHandler(async (req, res) => {
+  const { ids } = req.body;
+  const company_id = resolveCompanyId(req);
+  if (!Array.isArray(ids) || !ids.length) {
+    return res.status(400).json({ success: false, msg: 'Provide an array of product IDs.' });
+  }
+  const deleted = await Product.destroy({ where: { id: { [Op.in]: ids }, company_id } });
+  res.status(200).json({ success: true, msg: `${deleted} product${deleted !== 1 ? 's' : ''} deleted.`, data: { deleted } });
+});
+
+// @route  PATCH /api/products/bulk
+// @desc   Bulk-update status / category / tax_rate for multiple products
+// @access Protected (Admin)
+const bulkUpdateProducts = asyncHandler(async (req, res) => {
+  const { ids, update } = req.body;
+  const company_id = resolveCompanyId(req);
+  if (!Array.isArray(ids) || !ids.length) {
+    return res.status(400).json({ success: false, msg: 'Provide an array of product IDs.' });
+  }
+  const allowedFields = ['status', 'category_id', 'tax_rate'];
+  const safeUpdate = {};
+  for (const key of allowedFields) {
+    if (update && update[key] !== undefined) safeUpdate[key] = update[key] === 'null' ? null : update[key];
+  }
+  if (!Object.keys(safeUpdate).length) {
+    return res.status(400).json({ success: false, msg: 'No valid fields to update.' });
+  }
+  const [updated] = await Product.update(safeUpdate, { where: { id: { [Op.in]: ids }, company_id } });
+  res.status(200).json({ success: true, msg: `${updated} product${updated !== 1 ? 's' : ''} updated.`, data: { updated } });
+});
+
 module.exports = {
   getAllProducts,
   createProduct,
@@ -556,4 +624,6 @@ module.exports = {
   getStockHistory,
   importProducts,
   downloadImportTemplate,
+  bulkDeleteProducts,
+  bulkUpdateProducts,
 };
