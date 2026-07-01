@@ -14,6 +14,8 @@ const {
   getStockHistory,
   importProducts,
   downloadImportTemplate,
+  bulkDeleteProducts,
+  bulkUpdateProducts,
 } = require('../controllers/productController.js');
 
 const { protect, authorize, optionalAuth } = require('../middleware/authMiddleware.js');
@@ -88,6 +90,10 @@ router
 // Bulk import — static, must precede /:id
 router.get('/import/template', protect, authorize('admin', 'super-admin'), downloadImportTemplate);
 router.post('/import', protect, authorize('admin', 'super-admin'), uploadImport, importProducts);
+
+// Bulk operations — static, must precede /:id
+router.delete('/bulk', protect, authorize('admin', 'super-admin'), bulkDeleteProducts);
+router.patch('/bulk', protect, authorize('admin', 'super-admin'), bulkUpdateProducts);
 
 router.route('/pos/:barcode').get(protect, authorize("admin"), getProductByBarCode);
 
