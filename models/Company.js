@@ -77,6 +77,13 @@ module.exports = (sequelize, DataTypes) => {
       faq: DataTypes.JSON,
       return_refund_policy: DataTypes.TEXT,
       shipping_info: DataTypes.TEXT,
+      // VAT / tax
+      default_tax_rate: {
+        type: DataTypes.DECIMAL(5, 2),
+        defaultValue: 0,
+        allowNull: false,
+      },
+
       // SaaS fields
       subscription_plan: {
         type: DataTypes.ENUM("trial", "starter", "professional", "enterprise"),

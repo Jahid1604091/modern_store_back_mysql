@@ -85,6 +85,13 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(50), // e.g., 'kg', 'pcs', 'litre'
       },
 
+      // VAT / tax
+      tax_rate: {
+        type: DataTypes.DECIMAL(5, 2),
+        defaultValue: 0,
+        allowNull: false,
+      },
+
       // Brand / Vendor (future)
       brand_id: {
         type: DataTypes.INTEGER,
